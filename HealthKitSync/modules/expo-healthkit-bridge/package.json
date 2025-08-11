@@ -1,0 +1,10 @@
+{
+    "name": "expo-healthkit-bridge",
+    "version": "1.0.0",
+    "description": "HealthKit bridge for Expo",
+    "main": "src/index.ts",
+    "scripts": {},
+    "keywords": ["expo", "healthkit", "ios"],
+    "author": "",
+    "license": "MIT"
+  }
