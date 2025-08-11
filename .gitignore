@@ -35,3 +35,72 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# iOS
+ios/build/
+ios/Pods/
+ios/DerivedData/
+ios/*.xcworkspace
+ios/*.xcuserdata
+ios/.xcode.env.local
+*.ipa
+
+# Android
+android/build/
+android/.gradle/
+android/app/build/
+*.apk
+*.aab
+
+# CocoaPods
+Podfile.lock
+
+# Xcode
+*.xcuserstate
+*.xcscmblueprint
+project.xcworkspace/
+
+# Large files
+*.zip
+*.tar.gz
+*.dmg
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
