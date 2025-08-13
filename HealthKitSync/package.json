@@ -9,16 +9,21 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-google-signin/google-signin": "^12.2.1",
     "expo": "~53.0.20",
+    "expo-auth-session": "~6.2.1",
+    "expo-crypto": "~14.1.5",
     "expo-dev-client": "~5.2.4",
+    "expo-device": "~7.1.4",
     "expo-healthkit-bridge": "file:modules/expo-healthkit-bridge",
+    "expo-localization": "~16.1.6",
     "expo-modules-core": "~2.5.0",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-native": "0.79.5",
-    "react-native-reanimated": "^4.0.2",
-    "react-native-safe-area-context": "^5.6.0",
-    "react-native-worklets": "^0.4.1"
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

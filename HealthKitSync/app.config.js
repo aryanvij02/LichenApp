@@ -29,7 +29,8 @@ export default {
         favicon: "./assets/favicon.png"
       },
       plugins: [
-        "expo-dev-client"
+        "expo-dev-client",
+        "expo-localization"
       ]
     }
   };

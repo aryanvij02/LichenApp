@@ -1,6 +1,7 @@
 interface UploadConfig {
   apiUrl: string;
   userId: string;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 interface HealthSample {
@@ -235,11 +236,20 @@ export class HealthDataUploader {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Get auth headers if available
+        const baseHeaders = {
+          'Content-Type': 'application/json',
+        };
+        
+        const authHeaders = this.config.getAuthHeaders 
+          ? await this.config.getAuthHeaders() 
+          : {};
+
+        const headers = { ...baseHeaders, ...authHeaders };
+
         const response = await fetch(`${this.config.apiUrl}/upload-health-data`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify(batch)
         });
 

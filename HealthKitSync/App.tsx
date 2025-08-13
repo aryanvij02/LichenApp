@@ -11,6 +11,14 @@ import {
 import { StatusBar } from "expo-status-bar";
 import HealthKitBridge from "./modules/expo-healthkit-bridge/src/index";
 import { HealthDataUploader } from "./services/HealthDataUploader";
+import { UserInfo } from "./components/UserInfo";
+import {
+  convertUTCToLocal,
+  formatHealthKitTimestamp,
+} from "./utils/TimezoneUtils";
+import { useAuth } from "./hooks/useAuth";
+import { LoginScreen } from "./screens/LoginScreen";
+import { UserProfileService } from "./services/UserProfileService";
 
 interface SyncEvent {
   phase: "permissions" | "observer" | "anchored" | "upload";
@@ -28,6 +36,8 @@ interface SyncStatus {
 }
 
 export default function App() {
+  const { user, isSignedIn, isLoading: authLoading, signOut } = useAuth();
+
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -46,12 +56,17 @@ export default function App() {
   const healthTypes = HealthKitBridge.getAvailableTypes();
   // const healthTypes = ["HKQuantityTypeIdentifierStepCount"];
 
+  // Google Sign-In is now initialized in useAuth hook
+
   // Add to useEffect for streaming data
   useEffect(() => {
-    // Initialize uploader
+    if (!user || !isSignedIn) return;
+
+    // Initialize uploader with authenticated user
     const uploaderInstance = new HealthDataUploader({
       apiUrl: "https://wxa3064yx7.execute-api.us-west-2.amazonaws.com/dev", // Your API URL
-      userId: "user-aryan-123", // Replace with actual user ID
+      userId: `google_${user.id}`, // Use Google user ID
+      getAuthHeaders: () => UserProfileService.getAuthHeaders(), // Wrap in arrow function to preserve context
     });
     setUploader(uploaderInstance);
 
@@ -68,10 +83,11 @@ export default function App() {
         `📱 Received ${event.samples.length} new samples for ${event.type}`
       );
       event.samples.forEach((sample, index) => {
+        const localTime = formatHealthKitTimestamp(sample.startDate);
         console.log(
-          `   ${index + 1}. ${sample.value} ${sample.unit} at ${
-            sample.startDate
-          }`
+          `   ${index + 1}. ${sample.value} ${
+            sample.unit
+          } at ${localTime} (UTC: ${sample.startDate})`
         );
       });
 
@@ -96,7 +112,7 @@ export default function App() {
       streamSubscription?.remove();
       clearInterval(flushInterval);
     };
-  }, []);
+  }, [user, isSignedIn]);
 
   const loadSyncStatus = async () => {
     try {
@@ -150,8 +166,11 @@ export default function App() {
       console.log(`Found ${stepSamples.length} step samples`);
 
       stepSamples.forEach((sample, index) => {
+        const localTime = formatHealthKitTimestamp(sample.startDate);
         console.log(
-          `${index + 1}. ${sample.value} steps at ${sample.startDate}`
+          `${index + 1}. ${sample.value} steps at ${localTime} (UTC: ${
+            sample.startDate
+          })`
         );
       });
 
@@ -309,10 +328,11 @@ export default function App() {
       Object.entries(result).forEach(([type, samples]) => {
         console.log(`📈 ${type}: ${samples.length} samples`);
         samples.slice(0, 3).forEach((sample, index) => {
+          const localTime = formatHealthKitTimestamp(sample.startDate);
           console.log(
-            `   ${index + 1}. ${sample.value} ${sample.unit} at ${
-              sample.startDate
-            }`
+            `   ${index + 1}. ${sample.value} ${
+              sample.unit
+            } at ${localTime} (UTC: ${sample.startDate})`
           );
         });
         totalSamples += samples.length;
@@ -568,6 +588,22 @@ export default function App() {
     return new Date(isoString).toLocaleString();
   };
 
+  // Show loading screen
+  if (authLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBar style="auto" />
+        <ActivityIndicator size="large" color="#3498db" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show login screen if not signed in
+  if (!isSignedIn || !user) {
+    return <LoginScreen />;
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
@@ -580,6 +616,20 @@ export default function App() {
             React Native + HealthKit Integration
           </Text>
         </View>
+
+        {/* User Header */}
+        <View style={styles.userHeader}>
+          <View>
+            <Text style={styles.welcomeText}>Welcome, {user.name}!</Text>
+            <Text style={styles.userEmail}>{user.email}</Text>
+          </View>
+          <TouchableOpacity onPress={signOut} style={styles.signOutButton}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* User Info Section */}
+        <UserInfo />
 
         {/* Status Section */}
         <View style={styles.statusSection}>
@@ -921,5 +971,48 @@ const styles = StyleSheet.create({
   },
   typeStatus: {
     fontSize: 16,
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+  },
+  userHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: "white",
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  welcomeText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  userEmail: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 2,
+  },
+  signOutButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    backgroundColor: "#e74c3c",
+    borderRadius: 5,
+  },
+  signOutText: {
+    color: "white",
+    fontWeight: "bold",
   },
 });

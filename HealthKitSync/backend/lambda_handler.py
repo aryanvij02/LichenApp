@@ -4,6 +4,7 @@ from datetime import datetime
 import uuid
 from collections import defaultdict
 from botocore.exceptions import ClientError
+import base64
 
 def load_existing_uuids(s3, bucket_name, user_id):
     """Load existing sample UUIDs for deduplication"""
@@ -55,7 +56,270 @@ def filter_duplicate_samples(samples, existing_uuids):
     
     return new_samples, duplicate_count, new_uuids
 
+def decode_jwt_token(token):
+    """Decode JWT token to get user info (simplified - in production use proper JWT validation)"""
+    try:
+        # This is a simplified version - in production, properly validate the JWT signature
+        parts = token.split('.')
+        if len(parts) != 3:
+            return None
+        
+        # Decode the payload (second part)
+        payload = parts[1]
+        # Add padding if needed
+        payload += '=' * (4 - len(payload) % 4)
+        decoded = base64.urlsafe_b64decode(payload)
+        return json.loads(decoded)
+    except Exception as e:
+        print(f"Error decoding JWT: {e}")
+        return None
+
+def handle_user_profile(event, s3, bucket_name):
+    """Handle user profile creation and updates"""
+    try:
+        body = json.loads(event['body'])
+        
+        # Extract user profile data
+        user_profile = {
+            'userId': body.get('userId'),
+            'email': body.get('email'),
+            'name': body.get('name'),
+            'profilePictureUrl': body.get('profilePictureUrl'),
+            'timezone': body.get('timezone'),
+            'locale': body.get('locale'),
+            'country': body.get('country'),
+            'region': body.get('region'),
+            'lastAppVersion': body.get('lastAppVersion'),
+            'lastPlatform': body.get('lastPlatform'),
+            'lastUpdated': datetime.utcnow().isoformat(),
+            'createdAt': datetime.utcnow().isoformat()  # Will be overwritten if profile exists
+        }
+        
+        # Validate required fields
+        if not user_profile['userId'] or not user_profile['email']:
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+                },
+                'body': json.dumps({'error': 'Missing required fields: userId and email'})
+            }
+        
+        user_id = user_profile['userId']
+        profile_key = f"{user_id}/_profile/user_profile.json"
+        
+        # Check if profile already exists
+        try:
+            existing_response = s3.get_object(Bucket=bucket_name, Key=profile_key)
+            existing_profile = json.loads(existing_response['Body'].read().decode('utf-8'))
+            # Keep original creation date
+            user_profile['createdAt'] = existing_profile.get('createdAt', user_profile['createdAt'])
+            print(f"Updating existing profile for user: {user_id}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                print(f"Creating new profile for user: {user_id}")
+            else:
+                raise e
+        
+        # Save user profile to S3
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=profile_key,
+            Body=json.dumps(user_profile, indent=2),
+            ContentType='application/json'
+        )
+        
+        print(f"User profile saved successfully for: {user_profile['email']}")
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+            },
+            'body': json.dumps({
+                'status': 'success',
+                'message': 'User profile saved successfully',
+                'userId': user_id
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error in handle_user_profile: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+            },
+            'body': json.dumps({'error': f'Failed to save user profile: {str(e)}'})
+        }
+
+def handle_health_data_upload(event, s3, bucket_name):
+    """Handle health data upload (existing functionality)"""
+    # Parse the request body
+    if 'body' not in event:
+        return {
+            'statusCode': 400,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            },
+            'body': json.dumps({'error': 'No body in request'})
+        }
+    
+    body = json.loads(event['body'])
+    
+    # Validate required fields
+    if 'user_id' not in body or 'samples' not in body:
+        return {
+            'statusCode': 400,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            },
+            'body': json.dumps({'error': 'Missing user_id or samples'})
+        }
+    
+    user_id = body['user_id']
+    samples = body['samples']
+    batch_type = body.get('batch_type', 'realtime')
+    upload_metadata = body.get('upload_metadata', {})
+    
+    # Load existing UUIDs for deduplication
+    existing_uuids = load_existing_uuids(s3, bucket_name, user_id)
+    
+    # Filter out duplicate samples based on UUID
+    original_count = len(samples)
+    samples, duplicate_count, new_uuids = filter_duplicate_samples(samples, existing_uuids)
+    filtered_count = len(samples)
+    
+    print(f"Deduplication: {original_count} original samples → {filtered_count} new samples ({duplicate_count} duplicates skipped)")
+    
+    # If no new samples, return early
+    if not samples:
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            },
+            'body': json.dumps({
+                'status': 'success',
+                'message': 'All samples were duplicates, nothing uploaded',
+                'total_samples_received': original_count,
+                'duplicate_samples_skipped': duplicate_count,
+                'new_samples_uploaded': 0,
+                'files_created': 0
+            })
+        }
+    
+    # Group samples by data source, then by year-month, then by data type
+    grouped_samples = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    
+    for sample in samples:
+        source_name = sample.get('sourceName', 'unknown-source')
+        data_type = sample.get('type', 'unknown-type')
+        
+        # Clean source name for file system (remove spaces, special chars)
+        clean_source = source_name.replace(' ', '-').replace('/', '-').lower()
+        
+        # Extract year-month from sample date
+        try:
+            # Try startDate first, fallback to endDate
+            sample_date = sample.get('startDate') or sample.get('endDate')
+            if sample_date:
+                date_obj = datetime.fromisoformat(sample_date.replace('Z', '+00:00'))
+                year_month = date_obj.strftime('%Y-%m')
+            else:
+                year_month = 'unknown-date'
+        except:
+            year_month = 'unknown-date'
+        
+        grouped_samples[clean_source][year_month][data_type].append(sample)
+    
+    uploaded_files = []
+    total_samples_uploaded = 0
+    
+    # Create separate files for each source/year-month/data-type combination
+    for source_name, months_data in grouped_samples.items():
+        for year_month, types_data in months_data.items():
+            for data_type, type_samples in types_data.items():
+                # Create filename with timestamp
+                timestamp = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+                batch_id = str(uuid.uuid4())[:8]
+                
+                # Clean data type for file system
+                clean_data_type = data_type.replace('HKQuantityTypeIdentifier', '').replace('HKCategoryTypeIdentifier', '')
+                
+                # New hierarchical path: user/source/year-month/data-type/file.json
+                filename = f"{user_id}/{source_name}/{year_month}/{clean_data_type}/{timestamp}-{batch_type}-{batch_id}.json"
+                
+                # Prepare data to store
+                data_to_store = {
+                    'user_id': user_id,
+                    'data_source': source_name,
+                    'original_source_name': type_samples[0].get('sourceName', 'unknown'),
+                    'data_type': data_type,
+                    'year_month': year_month,
+                    'batch_type': batch_type,
+                    'upload_timestamp': timestamp,
+                    'batch_id': batch_id,
+                    'sample_count': len(type_samples),
+                    'samples': type_samples,
+                    'upload_metadata': upload_metadata
+                }
+                
+                # Upload to S3
+                s3.put_object(
+                    Bucket=bucket_name,
+                    Key=filename,
+                    Body=json.dumps(data_to_store, indent=2),
+                    ContentType='application/json'
+                )
+                
+                uploaded_files.append({
+                    'filename': filename,
+                    'source': source_name,
+                    'year_month': year_month,
+                    'data_type': clean_data_type,
+                    'sample_count': len(type_samples)
+                })
+                total_samples_uploaded += len(type_samples)
+                
+                print(f"Successfully uploaded {len(type_samples)} {data_type} samples from {source_name} ({year_month}) to {filename}")
+    
+    # Update the UUID index with new UUIDs
+    all_uuids = existing_uuids.union(new_uuids)
+    save_uuid_index(s3, bucket_name, user_id, all_uuids)
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS'
+        },
+        'body': json.dumps({
+            'status': 'success',
+            'total_samples_received': original_count,
+            'duplicate_samples_skipped': duplicate_count,
+            'new_samples_uploaded': total_samples_uploaded,
+            'files_created': len(uploaded_files),
+            'uploaded_files': uploaded_files,
+            'deduplication_enabled': True
+        })
+    }
+
 def lambda_handler(event, context):
+    """Main lambda handler that routes requests to appropriate functions"""
     print(f"Received event: {json.dumps(event)}")
     
     try:
@@ -63,171 +327,44 @@ def lambda_handler(event, context):
         s3 = boto3.client('s3')
         bucket_name = 'healthkit-data-lichen'  # Your bucket name
         
-        # Parse the request body
-        if 'body' not in event:
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'No body in request'})
-            }
-        
-        body = json.loads(event['body'])
-        
-        # Validate required fields
-        if 'user_id' not in body or 'samples' not in body:
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'Missing user_id or samples'})
-            }
-        
-        user_id = body['user_id']
-        samples = body['samples']
-        batch_type = body.get('batch_type', 'realtime')
-        upload_metadata = body.get('upload_metadata', {})
-        
-        # Load existing UUIDs for deduplication
-        existing_uuids = load_existing_uuids(s3, bucket_name, user_id)
-        
-        # Filter out duplicate samples based on UUID
-        original_count = len(samples)
-        samples, duplicate_count, new_uuids = filter_duplicate_samples(samples, existing_uuids)
-        filtered_count = len(samples)
-        
-        print(f"Deduplication: {original_count} original samples → {filtered_count} new samples ({duplicate_count} duplicates skipped)")
-        
-        # If no new samples, return early
-        if not samples:
+        # Handle OPTIONS requests for CORS
+        if event.get('httpMethod') == 'OPTIONS':
             return {
                 'statusCode': 200,
                 'headers': {
                     'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
                 },
-                'body': json.dumps({
-                    'status': 'success',
-                    'message': 'All samples were duplicates, nothing uploaded',
-                    'total_samples_received': original_count,
-                    'duplicate_samples_skipped': duplicate_count,
-                    'new_samples_uploaded': 0,
-                    'files_created': 0
-                })
+                'body': ''
             }
         
-        # Group samples by data source, then by year-month, then by data type
-        grouped_samples = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        # Get the request path to route to appropriate handler
+        path = event.get('path', '')
         
-        for sample in samples:
-            source_name = sample.get('sourceName', 'unknown-source')
-            data_type = sample.get('type', 'unknown-type')
+        if path.endswith('/user/profile'):
+            return handle_user_profile(event, s3, bucket_name)
+        elif path.endswith('/upload-health-data'):
+            return handle_health_data_upload(event, s3, bucket_name)
+        else:
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+                },
+                'body': json.dumps({'error': 'Endpoint not found'})
+            }
             
-            # Clean source name for file system (remove spaces, special chars)
-            clean_source = source_name.replace(' ', '-').replace('/', '-').lower()
-            
-            # Extract year-month from sample date
-            try:
-                # Try startDate first, fallback to endDate
-                sample_date = sample.get('startDate') or sample.get('endDate')
-                if sample_date:
-                    date_obj = datetime.fromisoformat(sample_date.replace('Z', '+00:00'))
-                    year_month = date_obj.strftime('%Y-%m')
-                else:
-                    year_month = 'unknown-date'
-            except:
-                year_month = 'unknown-date'
-            
-            grouped_samples[clean_source][year_month][data_type].append(sample)
-        
-        uploaded_files = []
-        total_samples_uploaded = 0
-        
-        # Create separate files for each source/year-month/data-type combination
-        for source_name, months_data in grouped_samples.items():
-            for year_month, types_data in months_data.items():
-                for data_type, type_samples in types_data.items():
-                    # Create filename with timestamp
-                    timestamp = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-                    batch_id = str(uuid.uuid4())[:8]
-                    
-                    # Clean data type for file system
-                    clean_data_type = data_type.replace('HKQuantityTypeIdentifier', '').replace('HKCategoryTypeIdentifier', '')
-                    
-                    # New hierarchical path: user/source/year-month/data-type/file.json
-                    filename = f"{user_id}/{source_name}/{year_month}/{clean_data_type}/{timestamp}-{batch_type}-{batch_id}.json"
-                    
-                    # Prepare data to store
-                    data_to_store = {
-                        'user_id': user_id,
-                        'data_source': source_name,
-                        'original_source_name': type_samples[0].get('sourceName', 'unknown'),
-                        'data_type': data_type,
-                        'year_month': year_month,
-                        'batch_type': batch_type,
-                        'upload_timestamp': timestamp,
-                        'batch_id': batch_id,
-                        'sample_count': len(type_samples),
-                        'samples': type_samples,
-                        'upload_metadata': upload_metadata
-                    }
-                    
-                    # Upload to S3
-                    s3.put_object(
-                        Bucket=bucket_name,
-                        Key=filename,
-                        Body=json.dumps(data_to_store, indent=2),
-                        ContentType='application/json'
-                    )
-                    
-                    uploaded_files.append({
-                        'filename': filename,
-                        'source': source_name,
-                        'year_month': year_month,
-                        'data_type': clean_data_type,
-                        'sample_count': len(type_samples)
-                    })
-                    total_samples_uploaded += len(type_samples)
-                    
-                    print(f"Successfully uploaded {len(type_samples)} {data_type} samples from {source_name} ({year_month}) to {filename}")
-        
-        # Update the UUID index with new UUIDs
-        all_uuids = existing_uuids.union(new_uuids)
-        save_uuid_index(s3, bucket_name, user_id, all_uuids)
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            'body': json.dumps({
-                'status': 'success',
-                'total_samples_received': original_count,
-                'duplicate_samples_skipped': duplicate_count,
-                'new_samples_uploaded': total_samples_uploaded,
-                'files_created': len(uploaded_files),
-                'uploaded_files': uploaded_files,
-                'deduplication_enabled': True
-            })
-        }
-        
     except Exception as e:
         print(f"Error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
             },
             'body': json.dumps({'error': str(e)})
-        }
+    }
