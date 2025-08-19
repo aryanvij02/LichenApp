@@ -1,0 +1,21 @@
+{
+    "build": {
+      "development": {
+        "ios": {
+          "simulator": true
+        }
+      },
+      "preview": {
+        "ios": {
+          "simulator": false,
+          "distribution": "internal"
+        }
+      },
+      "production": {
+        "ios": {
+          "simulator": false,
+          "distribution": "store"
+        }
+      }
+    }
+  }

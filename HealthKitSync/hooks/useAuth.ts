@@ -12,14 +12,19 @@ export const useAuth = () => {
   }, []);
 
   const initializeAuth = async () => {
-    // Configure Google Sign-In first
-    configureGoogleSignIn();
-    
-    // Small delay to ensure configuration is complete
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Then check auth state
-    checkAuthState();
+    try {
+      // Configure Google Sign-In first
+      configureGoogleSignIn();
+      
+      // Small delay to ensure configuration is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Then check auth state
+      checkAuthState();
+    } catch (error) {
+      console.error("Error in initializeAuth:", error);
+      setIsLoading(false);
+    }
   };
 
   const checkAuthState = async () => {
@@ -59,15 +64,20 @@ export const useAuth = () => {
   const signIn = async (): Promise<boolean> => {
     setIsLoading(true);
     try {
+      console.log("🔐 Starting Google Sign-In...");
+
       const googleUser = await UserProfileService.signInWithGoogle();
       if (googleUser) {
+        console.log("🔄 Setting user state in useAuth...");
         setUser(googleUser);
         setIsSignedIn(true);
+        console.log("✅ User state set in useAuth");
         
         // Create/update user profile
         const success = await UserProfileService.createOrUpdateUserProfile(googleUser);
         console.log(success ? '✅ User profile synced' : '⚠️ Profile sync failed');
         
+        console.log("🎯 Final state should be:", { user: googleUser.name, isSignedIn: true, authLoading: false });
         return true;
       } else {
         // Sign in failed, ensure state is clean

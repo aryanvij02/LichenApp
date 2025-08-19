@@ -1,3 +1,5 @@
+//This is the configuration file for the application which Expo uses. 
+//Defined how your app is built, configured, and deployed. 
 export default {
     expo: {
       name: "HealthKit Sync",
@@ -6,6 +8,15 @@ export default {
       orientation: "portrait",
       icon: "./assets/icon.png",
       userInterfaceStyle: "light",
+      extra: {
+        eas: {
+          projectId: "4bc06b8d-739c-4fd7-83f7-662e0caf7c28"
+        },
+        apiGatewayUrl: process.env.EXPO_API_GATEWAY_URL,
+        apiBackendUrl: process.env.EXPO_API_BACKEND_URL,
+        supabaseUrl: process.env.EXPO_SUPABASE_URL,
+        supabaseKey: process.env.EXPO_SUPABASE_KEY
+      },
       splash: {
         image: "./assets/splash.png",
         resizeMode: "contain",

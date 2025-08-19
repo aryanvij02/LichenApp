@@ -272,3 +272,5 @@ class ExpoHealthkitBridge {
 }
 
 export default new ExpoHealthkitBridge();
+
+

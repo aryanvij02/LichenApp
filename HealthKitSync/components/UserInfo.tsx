@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import * as Localization from "expo-localization";
 
 interface UserInfoProps {
@@ -10,8 +10,9 @@ export const UserInfo: React.FC<UserInfoProps> = ({ style }) => {
   // Get all localization data with fallbacks
   const locales = Localization.getLocales();
   const calendars = Localization.getCalendars();
-  
-  const timezone = locales[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const timezone =
+    locales[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const locale = locales[0] || {
     languageTag: "en-US",
     languageCode: "en",
@@ -54,67 +55,89 @@ export const UserInfo: React.FC<UserInfoProps> = ({ style }) => {
   });
 
   return (
-    <View style={[styles.container, style]}>
-      <Text style={styles.title}>User Information</Text>
+    <View className="bg-white rounded-xl p-4 mb-3 shadow-lg" style={style}>
+      <Text className="text-lg font-bold text-gray-800 mb-4 text-center">
+        User Information
+      </Text>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>🌍 Location & Time</Text>
-        <Text style={styles.infoText}>Timezone: {timezone}</Text>
-        <Text style={styles.infoText}>
+      <View className="mb-3 pb-2 border-b border-gray-100">
+        <Text className="text-sm font-bold text-gray-600 mb-2">
+          🌍 Location & Time
+        </Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
+          Timezone: {timezone}
+        </Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
           Offset: {offsetString} ({tzAbbr})
         </Text>
-        <Text style={styles.infoText}>Local Time: {localTime}</Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
+          Local Time: {localTime}
+        </Text>
         {locale.regionCode && (
-          <Text style={styles.infoText}>Region: {locale.regionCode}</Text>
+          <Text className="text-xs text-gray-800 mb-1 pl-2">
+            Region: {locale.regionCode}
+          </Text>
         )}
       </View>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>🌐 Locale Settings</Text>
-        <Text style={styles.infoText}>Language: {locale.languageTag}</Text>
-        <Text style={styles.infoText}>
+      <View className="mb-3 pb-2 border-b border-gray-100">
+        <Text className="text-sm font-bold text-gray-600 mb-2">
+          🌐 Locale Settings
+        </Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
+          Language: {locale.languageTag}
+        </Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
           Language Code: {locale.languageCode}
         </Text>
         {locale.textDirection && (
-          <Text style={styles.infoText}>
+          <Text className="text-xs text-gray-800 mb-1 pl-2">
             Text Direction: {locale.textDirection}
           </Text>
         )}
         {locale.digitGroupingSeparator && (
-          <Text style={styles.infoText}>
+          <Text className="text-xs text-gray-800 mb-1 pl-2">
             Number Format: 1{locale.digitGroupingSeparator}000
           </Text>
         )}
         {locale.decimalSeparator && (
-          <Text style={styles.infoText}>
+          <Text className="text-xs text-gray-800 mb-1 pl-2">
             Decimal: 1{locale.decimalSeparator}5
           </Text>
         )}
       </View>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>📅 Calendar</Text>
-        <Text style={styles.infoText}>
+      <View className="mb-3 pb-2 border-b border-gray-100">
+        <Text className="text-sm font-bold text-gray-600 mb-2">
+          📅 Calendar
+        </Text>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
           Calendar: {calendar?.identifier || "Default"}
         </Text>
-        <Text style={styles.infoText}>
+        <Text className="text-xs text-gray-800 mb-1 pl-2">
           First Day:{" "}
           {calendar?.firstWeekday
             ? getDayName(calendar.firstWeekday)
             : "Sunday"}
         </Text>
         {calendar?.timeZone && (
-          <Text style={styles.infoText}>Calendar TZ: {calendar.timeZone}</Text>
+          <Text className="text-xs text-gray-800 mb-1 pl-2">
+            Calendar TZ: {calendar.timeZone}
+          </Text>
         )}
       </View>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>🔧 For Development</Text>
-        <Text style={styles.debugText}>Offset Minutes: {offsetMinutes}</Text>
-        <Text style={styles.debugText}>
+      <View className="mb-3 pb-2 border-b border-gray-100">
+        <Text className="text-sm font-bold text-gray-600 mb-2">
+          🔧 For Development
+        </Text>
+        <Text className="text-xs text-gray-500 mb-1 pl-2 font-mono">
+          Offset Minutes: {offsetMinutes}
+        </Text>
+        <Text className="text-xs text-gray-500 mb-1 pl-2 font-mono">
           Is24Hour: {calendar?.uses24HourClock ? "Yes" : "No"}
         </Text>
-        <Text style={styles.debugText}>
+        <Text className="text-xs text-gray-500 mb-1 pl-2 font-mono">
           Is RLT: {locale.textDirection === "rtl" ? "Yes" : "No"}
         </Text>
       </View>
@@ -135,49 +158,3 @@ const getDayName = (dayNumber: number): string => {
   ];
   return days[dayNumber - 1] || "Unknown";
 };
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  infoSection: {
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#666",
-    marginBottom: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#333",
-    marginBottom: 3,
-    paddingLeft: 8,
-  },
-  debugText: {
-    fontSize: 12,
-    color: "#888",
-    marginBottom: 2,
-    paddingLeft: 8,
-    fontFamily: "monospace",
-  },
-});

@@ -1,0 +1,209 @@
+{
+    "steps": [
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-17",
+        "total_steps": 8542,
+        "source_name": "iPhone",
+        "upload_timestamp": "2025-08-17T12:30:15.123456Z",
+        "created_at": "2025-08-17T12:30:15.123456Z"
+      },
+      {
+        "user_id": "google_103919394379618915600", 
+        "local_date": "2025-08-16",
+        "total_steps": 12031,
+        "source_name": "iPhone",
+        "upload_timestamp": "2025-08-16T23:45:22.987654Z",
+        "created_at": "2025-08-16T23:45:22.987654Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-15", 
+        "total_steps": 6789,
+        "source_name": "iPhone",
+        "upload_timestamp": "2025-08-15T21:20:33.456789Z",
+        "created_at": "2025-08-15T21:20:33.456789Z"
+      }
+    ],
+    "heart_rate": [
+      {
+        "user_id": "google_103919394379618915600",
+        "reading_uuid": "A2A700F0-D429-405A-9725-DCCD54068CF4",
+        "timestamp": "2025-08-17T15:54:00Z",
+        "heart_rate": 78,
+        "unit": "count/min",
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T16:00:13.037159Z",
+        "created_at": "2025-08-17T16:00:13.037159Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "reading_uuid": "8543A734-1520-40CC-9926-2F4120FEF0D0",
+        "timestamp": "2025-08-17T15:56:00Z",
+        "heart_rate": 82,
+        "unit": "count/min",
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T16:00:13.037159Z",
+        "created_at": "2025-08-17T16:00:13.037159Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "reading_uuid": "5D762C17-E90A-4B94-A85D-0F47FED5733E",
+        "timestamp": "2025-08-17T15:58:00Z",
+        "heart_rate": 75,
+        "unit": "count/min",
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T16:00:13.037159Z",
+        "created_at": "2025-08-17T16:00:13.037159Z"
+      }
+    ],
+    "heart_rate_average": {
+      "user_id": "google_103919394379618915600",
+      "start_time": "2025-08-17T00:00:00Z",
+      "end_time": "2025-08-17T23:59:59Z", 
+      "average_heart_rate": 72.5,
+      "total_readings": 156,
+      "min_heart_rate": 55,
+      "max_heart_rate": 145
+    },
+    "resting_heart_rate": [
+      {
+        "user_id": "google_103919394379618915600",
+        "reading_uuid": "8B12C57C-626D-4527-8FBB-C932DA84A2A0",
+        "timestamp": "2025-08-17T07:00:00Z",
+        "local_date": "2025-08-17",
+        "resting_heart_rate": 57,
+        "unit": "count/min",
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T08:14:13.410563Z",
+        "created_at": "2025-08-17T08:14:13.410563Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "reading_uuid": "F17035C0-D16B-4E84-9F7C-7F9886A3A1AA",
+        "timestamp": "2025-08-16T07:00:00Z",
+        "local_date": "2025-08-16", 
+        "resting_heart_rate": 54,
+        "unit": "count/min",
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-16T08:27:10.349719Z",
+        "created_at": "2025-08-16T08:27:10.349719Z"
+      }
+    ],
+    "sleep_stages": [
+      {
+        "user_id": "google_103919394379618915600",
+        "stage_uuid": "00EF3524-D692-4491-B459-F05DAAA24818",
+        "start_time": "2025-08-17T01:30:00Z",
+        "end_time": "2025-08-17T02:15:00Z",
+        "sleep_stage": "DEEP",
+        "hk_value": 4,
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T09:00:21.277933Z",
+        "created_at": "2025-08-17T09:00:21.277933Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "stage_uuid": "633AB852-1955-41FE-912B-C0EB1DEC21DD",
+        "start_time": "2025-08-17T02:15:00Z",
+        "end_time": "2025-08-17T03:30:00Z",
+        "sleep_stage": "CORE",
+        "hk_value": 3,
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T09:00:21.277933Z",
+        "created_at": "2025-08-17T09:00:21.277933Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "stage_uuid": "260161B9-95FE-4A10-9C3E-B7CF43048451",
+        "start_time": "2025-08-17T03:30:00Z",
+        "end_time": "2025-08-17T03:45:00Z",
+        "sleep_stage": "AWAKE",
+        "hk_value": 2,
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T09:00:21.277933Z",
+        "created_at": "2025-08-17T09:00:21.277933Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "stage_uuid": "D8E49A33-9244-4AA0-B3D3-DF9DE3F51DD8",
+        "start_time": "2025-08-17T03:45:00Z",
+        "end_time": "2025-08-17T05:00:00Z",
+        "sleep_stage": "REM",
+        "hk_value": 5,
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T09:00:21.277933Z",
+        "created_at": "2025-08-17T09:00:21.277933Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "stage_uuid": "252DB6B0-8B5E-49DE-8C14-3E3DB0A0395F",
+        "start_time": "2025-08-17T05:00:00Z",
+        "end_time": "2025-08-17T06:30:00Z",
+        "sleep_stage": "CORE",
+        "hk_value": 3,
+        "source_name": "Apple Watch",
+        "upload_timestamp": "2025-08-17T09:00:21.277933Z",
+        "created_at": "2025-08-17T09:00:21.277933Z"
+      }
+    ],
+    "sleep_summary": {
+      "user_id": "google_103919394379618915600",
+      "local_date": "2025-08-17",
+      "total_sleep_duration": 420,
+      "sleep_stages_breakdown": {
+        "DEEP": 45,
+        "CORE": 165,
+        "REM": 75,
+        "AWAKE": 15
+      },
+      "sleep_efficiency": 88.5,
+      "sleep_start_time": "2025-08-17T01:30:00Z",
+      "sleep_end_time": "2025-08-17T06:30:00Z",
+      "total_stages_count": 5
+    },
+    "hrv": [
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-17",
+        "hrv_value": 42.3,
+        "unit": "ms",
+        "source_name": "Apple Watch"
+      },
+      {
+        "user_id": "google_103919394379618915600", 
+        "local_date": "2025-08-16",
+        "hrv_value": 38.7,
+        "unit": "ms",
+        "source_name": "Apple Watch"
+      }
+    ],
+    "body_battery": [
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-17",
+        "body_battery": 75,
+        "level": "good"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-16", 
+        "body_battery": 45,
+        "level": "fair"
+      }
+    ],
+    "stress": [
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-17",
+        "stress_level": 25,
+        "level": "low"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-16",
+        "stress_level": 65,
+        "level": "moderate"
+      }
+    ]
+  }

@@ -3,14 +3,12 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useAuth } from "../hooks/useAuth";
-
+import { useAuth } from "../context/AuthContext";
 export const LoginScreen: React.FC = () => {
-  const { signIn, isLoading } = useAuth();
+  const { signIn, isLoading, isSignedIn, user } = useAuth();
 
   const handleGoogleSignIn = async () => {
     const success = await signIn();
@@ -18,23 +16,28 @@ export const LoginScreen: React.FC = () => {
       Alert.alert("Sign In Failed", "Please try again");
     }
   };
-
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Text style={styles.appTitle}>HealthKit Sync</Text>
-        <Text style={styles.tagline}>Your Health Data, Synced Seamlessly</Text>
-      </View>
+    <View className="flex-1 bg-gray-50">
+      <View className="flex-1 justify-center items-center px-5">
+        <Text className="text-4xl font-bold text-gray-800 mb-2">
+          HealthKit Sync
+        </Text>
 
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>
+        <Text className="text-base text-gray-600 text-center">
+          Your Health Data, Synced Seamlessly
+        </Text>
+      </View>
+      <View className="flex-1 justify-center px-8 pb-12">
+        <Text className="text-3xl font-bold text-gray-800 mb-3 text-center">
+          Welcome Back
+        </Text>
+        <Text className="text-base text-gray-600 mb-10 text-center leading-6">
           Sign in to sync your health data securely and track your wellness
           journey
         </Text>
-
         <TouchableOpacity
-          style={[styles.googleButton, isLoading && styles.disabledButton]}
+          className="bg-blue-600 px-8 py-4 rounded-xl flex-row items-center justify-center shadow-lg mb-5"
+          style={isLoading ? { backgroundColor: "#BDC3C7" } : {}}
           onPress={handleGoogleSignIn}
           disabled={isLoading}
         >
@@ -42,13 +45,16 @@ export const LoginScreen: React.FC = () => {
             <ActivityIndicator color="white" size="small" />
           ) : (
             <>
-              <Text style={styles.googleIcon}>G</Text>
-              <Text style={styles.buttonText}>Continue with Google</Text>
+              <Text className="bg-white text-blue-600 w-6 h-6 rounded-xl text-center text-base font-bold mr-3 leading-6">
+                G
+              </Text>
+              <Text className="text-white text-base font-semibold">
+                Continue with Google
+              </Text>
             </>
           )}
         </TouchableOpacity>
-
-        <Text style={styles.privacyText}>
+        <Text className="text-xs text-gray-500 text-center leading-5 px-3">
           Your health data is encrypted and stored securely. We never share your
           personal information.
         </Text>
@@ -56,89 +62,3 @@ export const LoginScreen: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-  },
-  logoContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  appTitle: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#2c3e50",
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: "#7f8c8d",
-    textAlign: "center",
-  },
-  contentContainer: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 30,
-    paddingBottom: 50,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#2c3e50",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#7f8c8d",
-    marginBottom: 40,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  googleButton: {
-    backgroundColor: "#4285f4",
-    paddingHorizontal: 30,
-    paddingVertical: 16,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 20,
-  },
-  disabledButton: {
-    backgroundColor: "#bdc3c7",
-  },
-  googleIcon: {
-    backgroundColor: "white",
-    color: "#4285f4",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "bold",
-    marginRight: 12,
-    lineHeight: 24,
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  privacyText: {
-    fontSize: 12,
-    color: "#95a5a6",
-    textAlign: "center",
-    lineHeight: 18,
-    paddingHorizontal: 10,
-  },
-});
