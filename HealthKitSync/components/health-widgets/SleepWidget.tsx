@@ -99,16 +99,10 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
               <Text className="text-sm text-gray-400">Loading...</Text>
             </View>
           ) : sleepData ? (
-            <CircularProgress
-              progress={sleepData.sleep_efficiency}
-              size={100}
-              strokeWidth={8}
-              color={getSleepColor()}
-              backgroundColor="#E5E5EA"
-            >
+            <View className="items-center">
               <View className="items-center">
                 <Text
-                  className="text-lg font-bold"
+                  className="text-xl font-bold"
                   style={{ color: getSleepColor() }}
                 >
                   {formatSleepDuration(sleepData.total_sleep_duration)}
@@ -116,14 +110,14 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
                 <Text className="text-xs text-gray-400">
                   {Math.round(sleepData.sleep_efficiency)}% efficiency
                 </Text>
-                <Text
-                  className="text-xs font-semibold"
-                  style={{ color: getSleepColor() }}
-                >
-                  {getSleepQuality()}
-                </Text>
               </View>
-            </CircularProgress>
+              <Text
+                className="text-xs font-semibold mt-2"
+                style={{ color: getSleepColor() }}
+              >
+                {getSleepQuality()}
+              </Text>
+            </View>
           ) : (
             <View className="items-center space-y-1">
               <Text className="text-4xl font-bold text-gray-400">--</Text>

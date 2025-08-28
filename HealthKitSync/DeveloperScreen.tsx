@@ -17,6 +17,7 @@ import {
   convertUTCToLocal,
   formatHealthKitTimestamp,
 } from "./utils/TimezoneUtils";
+import { useAuth } from "./context/AuthContext";
 
 interface SyncEvent {
   phase: "permissions" | "observer" | "anchored" | "upload";
@@ -34,6 +35,7 @@ interface SyncStatus {
 }
 
 export const DeveloperScreen: React.FC = () => {
+  const { user } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -55,9 +57,20 @@ export const DeveloperScreen: React.FC = () => {
   // Add to useEffect for streaming data
   useEffect(() => {
     // Initialize uploader (without auth for developer tools)
+    const apiUrl = Constants.expoConfig?.extra?.apiGatewayUrl;
+    console.log("🔗 Using API URL for uploads:", apiUrl);
+
+    if (!apiUrl) {
+      console.error(
+        "❌ No API Gateway URL configured! Check your .env file and app.config.js"
+      );
+      return;
+    }
+
+    //TODO: How are we managing authentication for upload? Are we requiring auth headers?
     const uploaderInstance = new HealthDataUploader({
-      apiUrl: Constants.expoConfig?.extra?.apiGatewayUrl, // Your API URL -> This is how we pull from app.config.js
-      userId: `developer_user`, // Use static developer user ID
+      apiUrl: apiUrl,
+      userId: user?.id || "anonymous_user", // Use actual user ID
       getAuthHeaders: () => Promise.resolve({}), // No auth headers for developer tools
     });
     setUploader(uploaderInstance);
@@ -104,7 +117,7 @@ export const DeveloperScreen: React.FC = () => {
       streamSubscription?.remove();
       clearInterval(flushInterval);
     };
-  }, []);
+  }, [user]);
 
   const loadSyncStatus = async () => {
     try {

@@ -67,6 +67,32 @@ export interface SleepSummary {
   total_stages_count: number;
 }
 
+export interface StressMetrics {
+  current: number;
+  highest: number;
+  lowest: number;
+  average: number;
+  lastUpdated: Date;
+  user_id: string;
+  local_date: string;
+}
+
+export interface UpcomingActivity {
+  id: string;
+  type: string;
+  title: string;
+  time?: string;
+  description?: string;
+  user_id: string;
+}
+
+export interface DailySummary {
+  score: number;
+  date: string;
+  insights: string[];
+  user_id: string;
+}
+
 interface HRVData {
   user_id: string;
   local_date: string;
@@ -89,6 +115,8 @@ interface StressData {
   level: 'low' | 'moderate' | 'high';
 }
 
+
+
 // Type the dummy data properly
 interface DummyData {
   steps: StepsData[];
@@ -100,6 +128,9 @@ interface DummyData {
   hrv: HRVData[];
   body_battery: BodyBatteryData[];
   stress: StressData[];
+  stress_metrics: StressMetrics[];
+  upcoming_activities: UpcomingActivity[];
+  daily_summary: DailySummary[];
 }
 
 // Import and type the dummy data
@@ -307,6 +338,80 @@ export class HealthAPIService {
       local_date: localDate,
       stress_level: stress,
       level
+    };
+  }
+
+  static async getStressMetrics(localDate: string, userId: string): Promise<StressMetrics> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUserAndDate(dummyData.stress_metrics, userId, localDate);
+      const result = filtered.length > 0 ? filtered[0] : {
+        user_id: userId,
+        local_date: localDate,
+        current: Math.floor(Math.random() * 100),
+        highest: Math.floor(60 + Math.random() * 40),
+        lowest: Math.floor(Math.random() * 30),
+        average: Math.floor(30 + Math.random() * 40),
+        lastUpdated: new Date()
+      };
+      console.log(`📊 Dummy Stress Metrics for ${localDate}:`, result);
+      return result;
+    }
+    
+    const current = Math.floor(Math.random() * 100);
+    return {
+      user_id: userId,
+      local_date: localDate,
+      current,
+      highest: Math.floor(60 + Math.random() * 40),
+      lowest: Math.floor(Math.random() * 30),
+      average: Math.floor(30 + Math.random() * 40),
+      lastUpdated: new Date()
+    };
+  }
+
+  static async getUpcomingActivities(userId: string): Promise<UpcomingActivity[]> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUser(dummyData.upcoming_activities, userId);
+      console.log(`📅 Dummy Upcoming Activities:`, filtered);
+      return filtered;
+    }
+    
+    return [
+      {
+        id: '1',
+        type: 'medical',
+        title: 'Patient checkup',
+        time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+        description: 'Routine health assessment',
+        user_id: userId
+      }
+    ];
+  }
+
+  static async getDailySummary(localDate: string, userId: string): Promise<DailySummary> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUser(dummyData.daily_summary, userId);
+      const result = filtered.find(item => item.date === localDate) || {
+        score: Math.floor(60 + Math.random() * 40),
+        date: localDate,
+        insights: ['Good sleep quality', 'Active day', 'Low stress levels'],
+        user_id: userId
+      };
+      console.log(`📈 Dummy Daily Summary for ${localDate}:`, result);
+      return result;
+    }
+    
+    return {
+      score: Math.floor(60 + Math.random() * 40),
+      date: localDate,
+      insights: ['Good sleep quality', 'Active day', 'Low stress levels'],
+      user_id: userId
     };
   }
 }

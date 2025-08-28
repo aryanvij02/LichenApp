@@ -1,0 +1,47 @@
+# Systemd service file for LichenHealth Backend
+# Place this file in /etc/systemd/system/lichen-health.service
+# Then run:
+# sudo systemctl daemon-reload
+# sudo systemctl enable lichen-health
+# sudo systemctl start lichen-health
+
+[Unit]
+Description=LichenHealth FastAPI Backend
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/lichen-health/backend
+Environment=PATH=/opt/lichen-health/backend/venv/bin
+Environment=PYTHONPATH=/opt/lichen-health/backend
+ExecStart=/opt/lichen-health/backend/venv/bin/gunicorn -c gunicorn.conf.py main:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+# Security settings
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/lichen-health/backend/logs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lichen-health
+
+[Install]
+WantedBy=multi-user.target

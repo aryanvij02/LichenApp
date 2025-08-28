@@ -1,5 +1,6 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
+//Auth configuration for Google Sign In is defined here. 
 export const configureGoogleSignIn = () => {
   GoogleSignin.configure({
     // Replace these with your actual client IDs from Google Cloud Console
@@ -8,5 +9,11 @@ export const configureGoogleSignIn = () => {
     offlineAccess: true, // Enable to get refresh tokens
     hostedDomain: '', // Optional - restrict to specific domain
     forceCodeForRefreshToken: true, // Force refresh token for offline access
+    //These are where we define the scopes we want to access.
+    scopes: [
+      'https://www.googleapis.com/auth/calendar.readonly', // Read calendar events
+      'https://www.googleapis.com/auth/calendar.events', // Read/write calendar events
+      'https://www.googleapis.com/auth/calendar', // Full calendar access (optional - use if needed)
+    ],
   });
 };

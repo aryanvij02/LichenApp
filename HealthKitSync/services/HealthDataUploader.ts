@@ -247,14 +247,24 @@ export class HealthDataUploader {
 
         const headers = { ...baseHeaders, ...authHeaders };
 
-        const response = await fetch(`${this.config.apiUrl}/upload-health-data`, {
+        const uploadUrl = `${this.config.apiUrl}/upload-health-data`;
+        console.log(`🔗 Attempting upload to: ${uploadUrl}`);
+        console.log(`📤 Request method: POST`);
+        console.log(`📋 Request headers:`, headers);
+        console.log(`📦 Request body size:`, JSON.stringify(batch).length, 'bytes');
+        
+        const response = await fetch(uploadUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify(batch)
         });
 
+        console.log(`📥 Response status: ${response.status} ${response.statusText}`);
+        console.log(`📥 Response headers:`, Object.fromEntries(response.headers.entries()));
+
         if (!response.ok) {
           const errorText = await response.text();
+          console.log(`❌ Error response body:`, errorText);
           throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
@@ -264,6 +274,16 @@ export class HealthDataUploader {
       } catch (error) {
         lastError = error;
         console.log(`❌ Upload attempt ${attempt} failed:`, error);
+        
+        // Add more detailed error information
+        if (error instanceof TypeError && error.message === 'Network request failed') {
+          console.log('🔍 Network request failed - possible causes:');
+          console.log('  - Server is unreachable or down');
+          console.log('  - Invalid URL or DNS resolution failed');
+          console.log('  - SSL/TLS certificate issues');
+          console.log('  - Network connectivity problems');
+          console.log(`  - Attempted URL: ${uploadUrl}`);
+        }
         
         if (attempt < maxRetries) {
           // Exponential backoff

@@ -205,5 +205,86 @@
         "stress_level": 65,
         "level": "moderate"
       }
+    ],
+    "stress_metrics": [
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-17",
+        "current": 25,
+        "highest": 87,
+        "lowest": 12,
+        "average": 34,
+        "lastUpdated": "2025-08-17T15:27:00Z"
+      },
+      {
+        "user_id": "google_103919394379618915600",
+        "local_date": "2025-08-16",
+        "current": 65,
+        "highest": 92,
+        "lowest": 18,
+        "average": 45,
+        "lastUpdated": "2025-08-16T15:27:00Z"
+      }
+    ],
+    "upcoming_activities": [
+      {
+        "id": "activity-1",
+        "type": "medical",
+        "title": "Patient checkup",
+        "time": "2025-08-17T18:30:00Z",
+        "description": "Routine health assessment with Dr. Smith",
+        "user_id": "google_103919394379618915600"
+      },
+      {
+        "id": "activity-2",
+        "type": "fitness",
+        "title": "Morning yoga session",
+        "time": "2025-08-18T07:00:00Z",
+        "description": "30-minute guided yoga for stress relief",
+        "user_id": "google_103919394379618915600"
+      },
+      {
+        "id": "activity-3",
+        "type": "wellness",
+        "title": "Meditation reminder",
+        "time": "2025-08-17T20:00:00Z",
+        "description": "10-minute evening mindfulness session",
+        "user_id": "google_103919394379618915600"
+      }
+    ],
+    "daily_summary": [
+      {
+        "score": 79,
+        "date": "2025-08-17",
+        "insights": [
+          "Great sleep quality last night",
+          "Above average activity levels",
+          "Stress levels remained low throughout the day",
+          "Heart rate variability is optimal"
+        ],
+        "user_id": "google_103919394379618915600"
+      },
+      {
+        "score": 68,
+        "date": "2025-08-16",
+        "insights": [
+          "Good recovery from yesterday's activities",
+          "Moderate stress detected during afternoon",
+          "Sleep efficiency could be improved",
+          "Overall health metrics are stable"
+        ],
+        "user_id": "google_103919394379618915600"
+      },
+      {
+        "score": 85,
+        "date": "2025-08-15",
+        "insights": [
+          "Excellent stress management",
+          "Peak physical performance window",
+          "Optimal sleep and recovery metrics",
+          "High energy levels maintained"
+        ],
+        "user_id": "google_103919394379618915600"
+      }
     ]
   }
