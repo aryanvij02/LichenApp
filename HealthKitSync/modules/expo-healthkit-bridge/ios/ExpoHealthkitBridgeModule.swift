@@ -10,6 +10,7 @@ public class ExpoHealthkitBridgeModule: Module {
   private let healthStore = HKHealthStore()
   private var observerQueries: [HKObserverQuery] = []
   private var anchors: [String: HKQueryAnchor] = [:]
+  private let uploader = HealthDataUploader()
   
   public func definition() -> ModuleDefinition {
     Name("ExpoHealthkitBridge")
@@ -35,6 +36,24 @@ public class ExpoHealthkitBridgeModule: Module {
     AsyncFunction("getSyncStatus") { () -> [String: Any?] in
       return await self.getSyncStatus()
     }
+
+    AsyncFunction("configureUploader") { (apiUrl: String, userId: String, authHeaders: [String: String]) in
+      try self.uploader.configure(apiUrl: apiUrl, userId: userId, authHeaders: authHeaders)
+    }
+
+    AsyncFunction("uploadDateRange") { (types: [String], startDateISO: String, endDateISO: String) -> [String: Any] in
+      return try await self.uploadDateRange(types: types, startDateISO: startDateISO, endDateISO: endDateISO)
+    }
+
+    AsyncFunction("queryHeartbeatSeries") { (startDateISO: String, endDateISO: String) -> [String: Any] in
+      return try await self.queryHeartbeatSeries(startDateISO: startDateISO, endDateISO: endDateISO)
+    }
+
+    AsyncFunction("queryECGData") { (startDateISO: String, endDateISO: String, maxSamples: Int) -> [[String: Any]] in
+      return try await self.queryECGData(startDateISO: startDateISO, endDateISO: endDateISO, maxSamples: maxSamples)
+    }
+
+
 
     // Add these to your module definition
 AsyncFunction("queryDataInRange") { (types: [String], startDateISO: String, endDateISO: String) -> [String: [[String: Any]]] in
@@ -99,9 +118,16 @@ Events("onDataStream")
         print("🔍 DEBUG: Converting \(typeString) to \(type?.identifier ?? "nil")")
         return type
     }
+    //TODO: Add this to Javascript code later to request for this type as well
+    // Add heartbeat series type for detailed beat-by-beat data
+    var allTypesToRequest = Set(healthKitTypes)
+    if #available(iOS 13.0, *) {
+      allTypesToRequest.insert(HKSeriesType.heartbeat())
+      print("✅ DEBUG: Added HKSeriesType.heartbeat() for beat-by-beat data")
+    }
     print("✅ DEBUG: Converted to \(healthKitTypes.count) valid HealthKit types")
 
-    let typesToRequest = Set(healthKitTypes)
+    let typesToRequest = allTypesToRequest
     
     // Check status BEFORE requesting
     print("🔍 DEBUG: Status BEFORE authorization request:")
@@ -173,11 +199,14 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
     healthStore.execute(query)
   }
 }
-
+  //Starts the background sync
   private func startBackgroundSync(types: [String]) async throws {
+    //Converts the types strings to Healthkit types. JS can only send a list of Strings, but we convert them to HKSampleType
     let healthKitTypes = types.compactMap { typeString -> HKSampleType? in
       return self.healthKitTypeFromString(typeString)
     }
+    
+    log("👁️ Starting background sync for: \(healthKitTypes.map { $0.identifier })")
     
     self.stopAllObservers()
     
@@ -188,7 +217,7 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
           return
         }
         
-        Task { @MainActor in
+        Task { [weak self] in
           await self?.handleBackgroundUpdate(for: type)
           completionHandler()
         }
@@ -309,6 +338,13 @@ extension ExpoHealthkitBridgeModule {
 }
   
   private func healthKitTypeFromString(_ typeString: String) -> HKSampleType? {
+    // ECG type (iOS 12.2+)
+    if typeString == "HKElectrocardiogramType" {
+      if #available(iOS 12.2, *) {
+        return HKObjectType.electrocardiogramType()
+      }
+    }
+    
     // Quantity types
     if let quantityType = HKQuantityType.quantityType(forIdentifier: HKQuantityTypeIdentifier(rawValue: typeString)) {
       return quantityType
@@ -357,6 +393,11 @@ extension ExpoHealthkitBridgeModule {
     
     types.append(HKWorkoutType.workoutType())
     
+    // Add ECG type if available (iOS 12.2+)
+    if #available(iOS 12.2, *) {
+      types.append(HKObjectType.electrocardiogramType())
+    }
+    
     return types
   }
   
@@ -382,14 +423,16 @@ extension ExpoHealthkitBridgeModule {
         
         // Store the new anchor
         if let newAnchor = newAnchor {
-          Task { @MainActor in
-            self?.anchors[type.identifier] = newAnchor
-            self?.saveAnchors()
+          Task { [weak self] in
+            await MainActor.run {
+              self?.anchors[type.identifier] = newAnchor
+              self?.saveAnchors()
+            }
           }
         }
         
         // Update last sync date
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
           self?.setLastSyncDate()
         }
         
@@ -546,6 +589,202 @@ private func queryDataInRange(types: [String], startDateISO: String, endDateISO:
   return allData
 }
 
+// MARK: - Date Range Upload (Query + Upload Combined)
+private func uploadDateRange(types: [String], startDateISO: String, endDateISO: String) async throws -> [String: Any] {
+  log("🚀 Starting date range upload from \(startDateISO) to \(endDateISO)")
+  
+  // First, query the data
+  let historicalData = try await queryDataInRange(types: types, startDateISO: startDateISO, endDateISO: endDateISO)
+  
+  // Count total samples
+  let totalSamples = historicalData.values.reduce(0) { $0 + $1.count }
+  
+  guard totalSamples > 0 else {
+    let result: [String: Any] = [
+      "success": false,
+      "message": "No data found for the specified date range",
+      "samplesFound": 0,
+      "samplesUploaded": 0,
+      "dataTypes": historicalData.keys.sorted()
+    ]
+    log("📭 No data found for upload")
+    return result
+  }
+  
+  log("📊 Found \(totalSamples) samples across \(historicalData.count) data types")
+  
+  // Log data summary
+  for (dataType, samples) in historicalData {
+    if dataType == "HKDataTypeIdentifierElectrocardiogram" {
+      log("🫀 Found \(samples.count) ECG samples with voltage data")
+    } else {
+      log("📊 Found \(samples.count) \(dataType) samples")
+    }
+  }
+  
+  // Send progress event
+  self.sendEvent("onSyncEvent", [
+    "phase": "uploading",
+    "message": "Starting upload of \(totalSamples) samples",
+    "samplesFound": totalSamples
+  ])
+  
+  // Upload the data
+  let uploadResult = await uploader.uploadHistoricalData(historicalData, startDate: startDateISO, endDate: endDateISO)
+  
+  // Prepare result
+  let result: [String: Any] = [
+    "success": uploadResult.success,
+    "message": uploadResult.message,
+    "samplesFound": totalSamples,
+    "samplesUploaded": uploadResult.success ? totalSamples : 0,
+    "dataTypes": historicalData.keys.sorted(),
+    "dataTypeBreakdown": historicalData.mapValues { $0.count }
+  ]
+  
+  // Send completion event
+  self.sendEvent("onSyncEvent", [
+    "phase": uploadResult.success ? "completed" : "failed",
+    "message": uploadResult.message,
+    "samplesUploaded": uploadResult.success ? totalSamples : 0
+  ])
+  
+  log("🏁 Date range upload completed: \(uploadResult.success ? "SUCCESS" : "FAILED")")
+  return result
+}
+
+// MARK: - Heartbeat Series Query
+@available(iOS 13.0, *)
+private func queryHeartbeatSeries(startDateISO: String, endDateISO: String) async throws -> [String: Any] {
+  log("🫀 Starting heartbeat series query from \(startDateISO) to \(endDateISO)")
+  
+  // Parse dates using the same logic as other queries
+  let formatter = ISO8601DateFormatter()
+  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+  
+  guard let startDate = formatter.date(from: startDateISO),
+        let endDate = formatter.date(from: endDateISO) else {
+    throw NSError(domain: "HealthKit", code: 3, userInfo: [
+      NSLocalizedDescriptionKey: "Invalid date format for heartbeat series query"
+    ])
+  }
+  
+  // Step 1: Query for HKHeartbeatSeriesSample objects
+  let heartbeatSeriesSamples = try await queryHeartbeatSeriesSamples(from: startDate, to: endDate)
+  
+  if heartbeatSeriesSamples.isEmpty {
+    log("⚠️ No heartbeat series samples found in date range")
+    return [
+      "success": true,
+      "message": "No heartbeat series data found",
+      "series_count": 0,
+      "total_beats": 0,
+      "series": []
+    ]
+  }
+  
+  log("✅ Found \(heartbeatSeriesSamples.count) heartbeat series samples")
+  
+  // Step 2: Query beat-by-beat data for each series
+  var allSeriesData: [[String: Any]] = []
+  var totalBeats = 0
+  
+  for (index, seriesSample) in heartbeatSeriesSamples.enumerated() {
+    log("🫀 Processing series \(index + 1)/\(heartbeatSeriesSamples.count): \(seriesSample.uuid)")
+    
+    let beatsData = try await queryBeatsInSeries(seriesSample)
+    totalBeats += beatsData.count
+    
+    let seriesInfo: [String: Any] = [
+      "uuid": seriesSample.uuid.uuidString,
+      "start_date": ISO8601DateFormatter().string(from: seriesSample.startDate),
+      "end_date": ISO8601DateFormatter().string(from: seriesSample.endDate),
+      "source_name": seriesSample.sourceRevision.source.name,
+      "beat_count": beatsData.count,
+      "beats": beatsData
+    ]
+    
+    allSeriesData.append(seriesInfo)
+  }
+  
+  log("✅ Heartbeat series query complete: \(allSeriesData.count) series, \(totalBeats) total beats")
+  
+  return [
+    "success": true,
+    "message": "Heartbeat series data retrieved successfully",
+    "series_count": allSeriesData.count,
+    "total_beats": totalBeats,
+    "date_range": [
+      "start": startDateISO,
+      "end": endDateISO
+    ],
+    "series": allSeriesData
+  ]
+}
+
+@available(iOS 13.0, *)
+private func queryHeartbeatSeriesSamples(from startDate: Date, to endDate: Date) async throws -> [HKHeartbeatSeriesSample] {
+  let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+  
+  return try await withCheckedThrowingContinuation { continuation in
+    let query = HKSampleQuery(
+      sampleType: HKSeriesType.heartbeat(),
+      predicate: predicate,
+      //TODO: Maybe change this limit?
+      limit: 50, // Reasonable limit for series samples
+      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+    ) { _, samples, error in
+      if let error = error {
+        log("❌ Heartbeat series sample query error: \(error.localizedDescription)")
+        continuation.resume(throwing: error)
+        return
+      }
+      
+      let heartbeatSamples = (samples as? [HKHeartbeatSeriesSample]) ?? []
+      log("📥 Found \(heartbeatSamples.count) heartbeat series samples")
+      continuation.resume(returning: heartbeatSamples)
+    }
+    
+    healthStore.execute(query)
+  }
+}
+
+@available(iOS 13.0, *)
+private func queryBeatsInSeries(_ seriesSample: HKHeartbeatSeriesSample) async throws -> [[String: Any]] {
+  return try await withCheckedThrowingContinuation { continuation in
+    var beatsData: [[String: Any]] = []
+    let seriesStartDate = seriesSample.startDate
+    
+    let query = HKHeartbeatSeriesQuery(heartbeatSeries: seriesSample) { query, timeSinceSeriesStart, precededByGap, done, error in
+      
+      if let error = error {
+        log("❌ Heartbeat series query error: \(error.localizedDescription)")
+        continuation.resume(throwing: error)
+        return
+      }
+      
+      // Process each beat
+      if timeSinceSeriesStart >= 0 {
+        let absoluteTime = seriesStartDate.addingTimeInterval(timeSinceSeriesStart)
+        let beatInfo: [String: Any] = [
+          "time_since_start": timeSinceSeriesStart,
+          "absolute_time": ISO8601DateFormatter().string(from: absoluteTime),
+          "preceded_by_gap": precededByGap
+        ]
+        beatsData.append(beatInfo)
+      }
+      
+      // When done, return all collected beats
+      if done {
+        log("✅ Collected \(beatsData.count) beats from series \(seriesSample.uuid)")
+        continuation.resume(returning: beatsData)
+      }
+    }
+    
+    healthStore.execute(query)
+  }
+}
+
 private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: Date, to endDate: Date) async throws -> [[String: Any]] {
   let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
   
@@ -576,12 +815,23 @@ private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: D
       
       log("📥 Raw samples count for \(type.identifier): \(samples.count)")
       
-      let sampleData = samples.compactMap { sample -> [String: Any]? in
-        return self.sampleToDictionarySafely(sample)
+      // Process samples with ECG voltage data support in async context
+      Task { [weak self] in
+        guard let self = self else {
+          continuation.resume(returning: [])
+          return
+        }
+        
+        var sampleData: [[String: Any]] = []
+        for sample in samples {
+          if let processedSample = await self.sampleToDictionaryWithVoltage(sample) {
+            sampleData.append(processedSample)
+          }
+        }
+        
+        log("✅ Processed \(sampleData.count) valid samples for \(type.identifier)")
+        continuation.resume(returning: sampleData)
       }
-      
-      log("✅ Processed \(sampleData.count) valid samples for \(type.identifier)")
-      continuation.resume(returning: sampleData)
     }
     
     healthStore.execute(query)
@@ -589,6 +839,7 @@ private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: D
 }
 
 // MARK: - Enhanced Data Dictionary
+//This converts the incoming HealthKit data into a dictionary that is JSON-serializable
 private func sampleToDictionarySafely(_ sample: HKSample) -> [String: Any]? {
   // Validate sample data
   guard sample.startDate.timeIntervalSince1970 > 0,
@@ -609,8 +860,29 @@ private func sampleToDictionarySafely(_ sample: HKSample) -> [String: Any]? {
     "uuid": sample.uuid.uuidString
   ]
   
-  // Safely handle different sample types
-  if let quantitySample = sample as? HKQuantitySample {
+  // Safely handle different sample types - check most specific types first
+  if #available(iOS 12.2, *), let ecgSample = sample as? HKElectrocardiogram {
+    // ECG samples get basic metadata here, full voltage data via dedicated query
+    dict["ecgClassification"] = ecgClassificationToString(ecgSample.classification)
+    dict["symptomsStatus"] = symptomStatusToString(ecgSample.symptomsStatus)
+    dict["unit"] = "ecg"
+    
+    if let averageHeartRate = ecgSample.averageHeartRate {
+      dict["averageHeartRate"] = averageHeartRate.doubleValue(for: HKUnit(from: "count/min"))
+    }
+    
+    if let samplingFrequency = ecgSample.samplingFrequency {
+      dict["samplingFrequency"] = samplingFrequency.doubleValue(for: HKUnit.hertz())
+    }
+    
+    dict["numberOfVoltageMeasurements"] = ecgSample.numberOfVoltageMeasurements
+    
+    // Note: Basic ECG metadata only - for voltage data use sampleToDictionaryWithVoltage()
+  } else if let workout = sample as? HKWorkout {
+    dict["workoutActivityType"] = workout.workoutActivityType.rawValue
+    dict["duration"] = workout.duration
+    dict["unit"] = "workout"
+  } else if let quantitySample = sample as? HKQuantitySample {
     if let unit = getPreferredUnit(for: quantitySample.quantityType) {
       let value = quantitySample.quantity.doubleValue(for: unit)
       if value.isFinite && !value.isNaN && value >= 0 {
@@ -626,27 +898,98 @@ private func sampleToDictionarySafely(_ sample: HKSample) -> [String: Any]? {
     if categorySample.categoryType.identifier == "HKCategoryTypeIdentifierSleepAnalysis" {
       dict["sleep_stage"] = sleepAnalysisValueToString(categorySample.value)
     }
-  } else if let workout = sample as? HKWorkout {
-    dict["workoutActivityType"] = workout.workoutActivityType.rawValue
-    dict["duration"] = workout.duration
-    dict["unit"] = "workout"
   }
 
-  // Safely handle metadata
+  // Handle metadata with proper nested structure preservation
   if let metadata = sample.metadata, !metadata.isEmpty {
-    let safeMetadata = metadata.compactMapValues { value -> Any? in
-      if JSONSerialization.isValidJSONObject([value]) {
-        return value
-      } else {
-        return String(describing: value)
-      }
-    }
-    if !safeMetadata.isEmpty {
-      dict["metadata"] = safeMetadata
+    
+    // Note: Detailed HRV metadata (InstantaneousBeatsPerMinute) is only available 
+    // in manual XML exports, not via the programmatic HealthKit API
+    
+    let processedMetadata = processMetadataSafely(metadata)
+    if !processedMetadata.isEmpty {
+      dict["metadata"] = processedMetadata
     }
   }
 
   return dict
+}
+
+//--------------------------------Queries ECG Voltage Data, and handles upload to S3, and obtains the ECG Data Dictionary --------------------------------
+private func sampleToDictionaryWithVoltage(_ sample: HKSample) async -> [String: Any]? {
+  // For ECG samples, include voltage data
+  if #available(iOS 12.2, *), let ecgSample = sample as? HKElectrocardiogram {
+    let voltagePoints = await queryECGVoltageDataSafely(ecgSample)
+    return await ecgSampleToDictionary(ecgSample, voltagePoints: voltagePoints) //Awaiting since it is an Asyn function
+  }
+  
+  // For all other samples, use standard processing
+  return sampleToDictionarySafely(sample)
+}
+
+private func queryECGVoltageDataSafely(_ ecgSample: HKElectrocardiogram) async -> [[String: Any]] {
+  do {
+    return try await queryECGVoltageData(ecgSample)
+  } catch {
+    log("⚠️ Failed to get voltage data for ECG \(ecgSample.uuid): \(error)")
+    return [] // Return empty array if voltage data fails
+  }
+}
+
+// MARK: - Metadata Processing
+/// Properly process metadata preserving nested structures like InstantaneousBeatsPerMinute
+private func processMetadataSafely(_ metadata: [String: Any]) -> [String: Any] {
+  var processedMetadata: [String: Any] = [:]
+  
+  for (key, value) in metadata {
+    processedMetadata[key] = processMetadataValue(value)
+  }
+  
+  return processedMetadata
+}
+
+/// Recursively process metadata values to preserve nested structures
+private func processMetadataValue(_ value: Any) -> Any {
+  // Handle arrays (like InstantaneousBeatsPerMinute)
+  if let arrayValue = value as? [Any] {
+    return arrayValue.map { processMetadataValue($0) }
+  }
+  
+  // Handle dictionaries (nested metadata)
+  if let dictValue = value as? [String: Any] {
+    var processedDict: [String: Any] = [:]
+    for (key, val) in dictValue {
+      processedDict[key] = processMetadataValue(val)
+    }
+    return processedDict
+  }
+  
+  // Handle primitive types that are JSON-safe
+  if value is String || value is NSNumber || value is Bool {
+    return value
+  }
+  
+  // Handle NSDate -> ISO8601 string
+  if let date = value as? Date {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: date)
+  }
+  
+  // Handle NSData -> base64 string
+  if let data = value as? Data {
+    return data.base64EncodedString()
+  }
+  
+  // For any other complex types, try JSON serialization first
+  if JSONSerialization.isValidJSONObject([value]) {
+    return value
+  }
+  
+  // Last resort: convert to string but log it
+  let stringValue = String(describing: value)
+  log("⚠️ Converting complex metadata value to string: \(stringValue.prefix(100))...")
+  return stringValue
 }
 
 // MARK: - Sleep Analysis Helper
@@ -702,27 +1045,30 @@ private func getLimitedHealthTypes(from types: [String]) -> [String] {
   return types.filter { essentialTypes.contains($0) }
 }
 
-// MARK: - Enhanced Background Updates with Streaming
+// MARK: - Enhanced Background Updates with Native Upload
 @MainActor
 private func handleBackgroundUpdate(for type: HKSampleType) async {
   do {
     let result = try await self.performAnchoredQuery(for: type)
     
-    // Get the actual new samples for streaming
+    // Get the actual new samples for upload
     if result.added > 0 {
-      let newSamples = try await getRecentSamples(for: type, count: result.added)
+      let newSamplesDict = try await getRecentSamples(for: type, count: result.added)
       
-      // Send streaming event with actual sample data
-      self.sendEvent("onDataStream", [
-        "type": type.identifier,
-        "samples": newSamples,
-        "timestamp": ISO8601DateFormatter().string(from: Date())
-      ])
+      // Save locally for offline capability
+      await saveDataLocally(samples: newSamplesDict)
       
-      // Also save locally for offline capability
-      await saveDataLocally(samples: newSamples)
+      // Upload samples directly via Swift
+      await uploader.uploadRawSamples(newSamplesDict, batchType: "realtime")
+      
+      if type.identifier == "HKDataTypeIdentifierElectrocardiogram" {
+        log("✅ Background update: \(result.added) ECG samples with voltage data uploaded")
+      } else {
+        log("✅ Background update: \(result.added) \(type.identifier) samples uploaded")
+      }
     }
     
+    // Send sync event for monitoring (keep for debugging)
     self.sendEvent("onSyncEvent", [
       "phase": "observer",
       "message": "Background update for \(type.identifier)",
@@ -732,7 +1078,7 @@ private func handleBackgroundUpdate(for type: HKSampleType) async {
       ]
     ])
   } catch {
-    log("Error in background update for \(type.identifier): \(error)")
+    log("❌ Error in background update for \(type.identifier): \(error)")
   }
 }
 
@@ -751,11 +1097,24 @@ private func getRecentSamples(for type: HKSampleType, count: Int) async throws -
         return
       }
       
-      let sampleData = samples?.compactMap { sample -> [String: Any]? in
-        return self.sampleToDictionarySafely(sample)
-      } ?? []
-      
-      continuation.resume(returning: sampleData)
+      // Process samples with ECG voltage data support in async context
+      Task { [weak self] in
+        guard let self = self else {
+          continuation.resume(returning: [])
+          return
+        }
+        
+        var sampleData: [[String: Any]] = []
+        if let samples = samples {
+          for sample in samples {
+            if let processedSample = await self.sampleToDictionaryWithVoltage(sample) {
+              sampleData.append(processedSample)
+            }
+          }
+        }
+        
+        continuation.resume(returning: sampleData)
+      }
     }
     
     healthStore.execute(query)
@@ -823,4 +1182,300 @@ private func clearLocalData(beforeDate: String?) async {
     log("Cleared all local data")
   }
 }
+
+// MARK: - ECG Data Query
+@available(iOS 12.2, *)
+private func queryECGData(startDateISO: String, endDateISO: String, maxSamples: Int) async throws -> [[String: Any]] {
+  log("🫀 Starting ECG data query from \(startDateISO) to \(endDateISO), max samples: \(maxSamples)")
+  
+  // Parse dates using the same logic as other queries
+  let formatter = ISO8601DateFormatter()
+  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+  
+  var startDate: Date?
+  var endDate: Date?
+  
+  // Try multiple date parsing strategies (same as queryDataInRange)
+  startDate = formatter.date(from: startDateISO)
+  endDate = formatter.date(from: endDateISO)
+  
+  if startDate == nil || endDate == nil {
+    formatter.formatOptions = [.withInternetDateTime]
+    startDate = formatter.date(from: startDateISO)
+    endDate = formatter.date(from: endDateISO)
+  }
+  
+  guard let validStartDate = startDate,
+        let validEndDate = endDate else {
+    log("❌ Could not parse ECG query dates. Start: \(startDateISO), End: \(endDateISO)")
+    throw NSError(domain: "HealthKit", code: 3, userInfo: [
+      NSLocalizedDescriptionKey: "Invalid date format for ECG query. Received: start=\(startDateISO), end=\(endDateISO)"
+    ])
+  }
+  
+  log("✅ Parsed ECG query dates - Start: \(validStartDate), End: \(validEndDate)")
+  
+  // Step 1: Query ECG samples
+  let ecgSamples = try await queryECGSamples(from: validStartDate, to: validEndDate, limit: maxSamples)
+  
+  if ecgSamples.isEmpty {
+    log("⚠️ No ECG samples found in date range")
+    return []
+  }
+  
+  log("✅ Found \(ecgSamples.count) ECG samples")
+  
+  // Step 2: Process each ECG sample to get metadata + voltage data
+  var allECGData: [[String: Any]] = []
+  
+  for (index, ecgSample) in ecgSamples.enumerated() {
+    log("🫀 Processing ECG sample \(index + 1)/\(ecgSamples.count): \(ecgSample.uuid)")
+    
+    do {
+      // Get voltage measurements for this ECG sample
+      let voltagePoints = try await queryECGVoltageData(ecgSample)
+      
+      // Convert to our standard format (enhanced HealthSample)
+      let ecgDict = await ecgSampleToDictionary(ecgSample, voltagePoints: voltagePoints)
+      allECGData.append(ecgDict)
+      
+      log("✅ Processed ECG sample: \(voltagePoints.count) voltage points")
+      
+      // Send progress event
+      self.sendEvent("onSyncEvent", [
+        "phase": "historical",
+        "message": "Processed ECG sample \(index + 1)/\(ecgSamples.count): \(voltagePoints.count) voltage points",
+        "progress": [
+          "completed": index + 1,
+          "total": ecgSamples.count
+        ]
+      ])
+      
+    } catch {
+      log("❌ Error processing ECG sample \(ecgSample.uuid): \(error)")
+      // Continue with other samples even if one fails
+    }
+  }
+  
+  log("🏁 ECG query completed: \(allECGData.count) samples processed")
+  return allECGData
+}
+
+@available(iOS 12.2, *)
+private func queryECGSamples(from startDate: Date, to endDate: Date, limit: Int) async throws -> [HKElectrocardiogram] {
+  let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+  
+  return try await withCheckedThrowingContinuation { continuation in
+    let query = HKSampleQuery(
+      sampleType: HKObjectType.electrocardiogramType(),
+      predicate: predicate,
+      limit: limit,
+      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+    ) { _, samples, error in
+      if let error = error {
+        log("❌ ECG sample query error: \(error.localizedDescription)")
+        continuation.resume(throwing: error)
+        return
+      }
+      
+      let ecgSamples = (samples as? [HKElectrocardiogram]) ?? []
+      log("📥 Found \(ecgSamples.count) ECG samples")
+      continuation.resume(returning: ecgSamples)
+    }
+    
+    healthStore.execute(query)
+  }
+}
+
+//ECG Voltage Data Querying
+//https://developer.apple.com/documentation/healthkit/hkelectrocardiogramquery
+@available(iOS 12.2, *)
+private func queryECGVoltageData(_ ecgSample: HKElectrocardiogram) async throws -> [[String: Any]] {
+  return try await withCheckedThrowingContinuation { continuation in
+    var voltagePoints: [[String: Any]] = []
+    
+    let query = HKElectrocardiogramQuery(ecgSample) { query, result in
+      switch result {
+      case .measurement(let measurement):
+        // Get voltage for Apple Watch Lead I equivalent
+        if let voltageQuantity = measurement.quantity(for: .appleWatchSimilarToLeadI) {
+          let voltage = voltageQuantity.doubleValue(for: HKUnit.volt())
+          let timeSinceStart = measurement.timeSinceSampleStart
+          
+          let voltagePoint: [String: Any] = [
+            "t": timeSinceStart, // time since start in seconds
+            "v": voltage         // voltage in volts
+          ]
+          voltagePoints.append(voltagePoint)
+        }
+        
+      case .done:
+        log("✅ Collected \(voltagePoints.count) voltage points from ECG \(ecgSample.uuid)")
+        continuation.resume(returning: voltagePoints)
+        
+      case .error(let error):
+        log("❌ ECG voltage query error: \(error.localizedDescription)")
+        continuation.resume(throwing: error)
+        
+      @unknown default:
+        log("⚠️ Unknown ECG query result case")
+        continuation.resume(returning: voltagePoints)
+      }
+    }
+    
+    healthStore.execute(query)
+  }
+}
+
+
+//--------------------------------Function that handles ECG Voltage Upload and Creates ECG Data Dictionary which is sent to Lambda --------------------------------
+@available(iOS 12.2, *)
+private func ecgSampleToDictionary(_ ecgSample: HKElectrocardiogram, voltagePoints: [[String: Any]]) async -> [String: Any] {
+  let formatter = ISO8601DateFormatter()
+  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+  
+  var dict: [String: Any] = [
+    "startDate": formatter.string(from: ecgSample.startDate),
+    "endDate": formatter.string(from: ecgSample.endDate),
+    "type": "HKElectrocardiogramType",
+    "sourceName": ecgSample.sourceRevision.source.name,
+    "uuid": ecgSample.uuid.uuidString,
+    "unit": "ecg"
+  ]
+  
+  // Add ECG-specific metadata
+  dict["ecgClassification"] = ecgClassificationToString(ecgSample.classification)
+  dict["symptomsStatus"] = symptomStatusToString(ecgSample.symptomsStatus)
+  
+  if let averageHeartRate = ecgSample.averageHeartRate {
+    dict["averageHeartRate"] = averageHeartRate.doubleValue(for: HKUnit(from: "count/min"))
+  }
+  
+  if let samplingFrequency = ecgSample.samplingFrequency {
+    dict["samplingFrequency"] = samplingFrequency.doubleValue(for: HKUnit.hertz())
+  }
+  
+  dict["numberOfVoltageMeasurements"] = ecgSample.numberOfVoltageMeasurements
+  
+  // Handle voltage data - upload to S3 if data is large
+  if !voltagePoints.isEmpty {
+    // Estimate voltage data size
+    do {
+      let voltageDataSize = try JSONSerialization.data(withJSONObject: voltagePoints, options: []).count
+      log("🫀 ECG voltage data size: \(voltageDataSize) bytes (\(String(format: "%.2f", Double(voltageDataSize) / 1024 / 1024)) MB)")
+      
+      // If voltage data is larger than 1MB, upload to S3
+      if voltageDataSize > 1024 * 1024 {
+        log("📤 Large voltage data detected, uploading to S3...")
+        
+        // Upload to S3 and get S3 key
+        if let s3Key = await uploader.uploadVoltageDataToS3(voltagePoints, sampleUUID: ecgSample.uuid.uuidString) {
+          // Replace voltage points with S3 reference
+          dict["voltageS3Key"] = s3Key
+          dict["voltageDataUploaded"] = true
+          log("✅ Voltage data uploaded to S3: \(s3Key)")
+        } else {
+          // S3 upload failed, include smaller subset of voltage data
+          log("❌ S3 upload failed, including limited voltage data")
+          let limitedVoltagePoints = Array(voltagePoints.prefix(100)) // First 100 points only
+          dict["voltagePoints"] = limitedVoltagePoints
+          dict["voltageDataTruncated"] = true
+          dict["originalVoltagePointsCount"] = voltagePoints.count
+        }
+      } else {
+        // Small voltage data, include directly in payload
+        log("📦 Small voltage data, including in payload")
+        dict["voltagePoints"] = voltagePoints
+        dict["voltageDataUploaded"] = false
+      }
+      
+      // Always include voltage points count for reference
+      dict["voltagePointsCount"] = voltagePoints.count
+      
+    } catch {
+      log("❌ Error processing voltage data: \(error)")
+      dict["voltageProcessingError"] = true
+      dict["voltagePointsCount"] = voltagePoints.count
+    }
+  } else {
+    log("⚠️ No voltage points available for ECG sample")
+    dict["voltagePointsCount"] = 0
+  }
+  
+  // Add metadata container for additional info
+  let voltageUploadAttempted: Bool = {
+    guard voltagePoints.count > 0 else { return false }
+    do {
+      let data = try JSONSerialization.data(withJSONObject: voltagePoints, options: [])
+      return data.count > 1024 * 1024
+    } catch {
+      return false
+    }
+  }()
+  
+  dict["metadata"] = [
+    "classification": ecgClassificationToString(ecgSample.classification),
+    "symptomsStatus": symptomStatusToString(ecgSample.symptomsStatus),
+    "hasVoltageData": !voltagePoints.isEmpty,
+    "voltageUploadAttempted": voltageUploadAttempted
+  ]
+  
+  return dict
+}
+
+// MARK: - ECG Helper Methods
+@available(iOS 12.2, *)
+private func ecgClassificationToString(_ classification: HKElectrocardiogram.Classification) -> String {
+  switch classification {
+  case .notSet:
+    return "not_set"
+  case .sinusRhythm:
+    return "sinus_rhythm"
+  case .atrialFibrillation:
+    return "atrial_fibrillation"
+  case .inconclusiveLowHeartRate:
+    return "inconclusive_low_heart_rate"
+  case .inconclusiveHighHeartRate:
+    return "inconclusive_high_heart_rate"
+  case .inconclusivePoorReading:
+    return "inconclusive_poor_reading"
+  case .inconclusiveOther:
+    return "inconclusive_other"
+  case .unrecognized:
+    return "unrecognized"
+  @unknown default:
+    return "unknown"
+  }
+}
+
+@available(iOS 12.2, *)
+private func symptomStatusToString(_ symptomsStatus: HKElectrocardiogram.SymptomsStatus) -> String {
+  switch symptomsStatus {
+  case .notSet:
+    return "not_set"
+  case .none:
+    return "none"
+  case .present:
+    return "present"
+  @unknown default:
+    return "unknown"
+  }
+}
+
+
+
+private func authorizationStatusDescription(_ status: HKAuthorizationStatus) -> String {
+  switch status {
+  case .notDetermined:
+    return "not_determined"
+  case .sharingDenied:
+    return "sharing_denied"
+  case .sharingAuthorized:
+    return "sharing_authorized"
+  @unknown default:
+    return "unknown"
+  }
+}
+
+
 }

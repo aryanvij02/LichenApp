@@ -15,8 +15,10 @@ export const CalendarScreen: React.FC = () => {
   const getTodayString = () => {
     const now = new Date();
     const locales = Localization.getLocales();
+    const calendars = Localization.getCalendars();
     const timezone =
-      locales[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      calendars[0]?.timeZone ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // Get date in user's timezone
     const todayInTimezone = now.toLocaleDateString("en-CA", {
@@ -26,9 +28,19 @@ export const CalendarScreen: React.FC = () => {
       day: "2-digit",
     });
 
+    // Additional debugging to help identify timezone issues
+    const nowLocal = new Date().toLocaleDateString("en-CA");
+    const nowUTC = new Date().toISOString().split("T")[0];
+
     console.log(
-      `📅 CalendarScreen: Today in timezone ${timezone}: ${todayInTimezone}`
+      `📅 CalendarScreen Debug:
+      - Timezone: ${timezone}
+      - Today in timezone: ${todayInTimezone}
+      - Today local: ${nowLocal}
+      - Today UTC: ${nowUTC}
+      - Timezone offset: ${new Date().getTimezoneOffset()} minutes`
     );
+
     return todayInTimezone; // Returns YYYY-MM-DD format
   };
 
@@ -48,20 +60,37 @@ export const CalendarScreen: React.FC = () => {
   };
 
   const goToPreviousDay = () => {
-    const currentDate = new Date(selectedDate);
+    // Parse the date as local date to avoid timezone issues
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const currentDate = new Date(year, month - 1, day); // month is 0-indexed
     currentDate.setDate(currentDate.getDate() - 1);
-    setSelectedDate(currentDate.toISOString().split("T")[0]);
+
+    // Format back to YYYY-MM-DD in local timezone
+    const newDateString = currentDate.toLocaleDateString("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    setSelectedDate(newDateString);
   };
 
   const goToNextDay = () => {
-    const currentDate = new Date(selectedDate);
+    // Parse the date as local date to avoid timezone issues
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const currentDate = new Date(year, month - 1, day); // month is 0-indexed
     currentDate.setDate(currentDate.getDate() + 1);
-    setSelectedDate(currentDate.toISOString().split("T")[0]);
+
+    // Format back to YYYY-MM-DD in local timezone
+    const newDateString = currentDate.toLocaleDateString("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    setSelectedDate(newDateString);
   };
 
   // Check calendar permissions and load events
   useEffect(() => {
-    setSelectedDate(new Date().toISOString().split("T")[0]);
     checkCalendarAccess();
   }, []);
 
@@ -249,7 +278,7 @@ export const CalendarScreen: React.FC = () => {
             </TouchableOpacity>
 
             <Text className="text-lg font-semibold text-gray-900 text-center flex-1">
-              {new Date(currentDate).toLocaleDateString("en-US", {
+              {new Date(currentDate + "T00:00:00").toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
@@ -420,12 +449,15 @@ export const CalendarScreen: React.FC = () => {
               Selected Date
             </Text>
             <Text className="text-gray-600">
-              {new Date(selectedDate).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+              {new Date(selectedDate + "T00:00:00").toLocaleDateString(
+                "en-US",
+                {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                }
+              )}
             </Text>
           </View>
         )}

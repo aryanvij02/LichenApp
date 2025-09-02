@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -23,10 +24,24 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { DeveloperScreen } from "./DeveloperScreen";
 import { HealthKitService } from "./services/HealthKitService";
 
-// Enable native screens for better performance
+//This allows us to use native screen components (ios / android) instead or RN Views which improves performance
 enableScreens();
 
+//Packages supplied by RN to create the navigation stack and bottom tabs
 const Tab = createBottomTabNavigator();
+
+// Create a client for TanStack Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+      gcTime: 30 * 60 * 1000, // 30 minutes - garbage collection time
+      retry: 3, // Retry failed requests 3 times
+      refetchOnWindowFocus: false, // Don't refetch on app focus
+      refetchOnReconnect: true, // Refetch when network reconnects
+    },
+  },
+});
 const Stack = createStackNavigator();
 
 // Initialize HealthKit service
@@ -34,7 +49,9 @@ HealthKitService.initialize();
 
 // Main content component that uses auth
 const AppContent: React.FC = () => {
-  console.log("🚀 AppContent component starting...");
+  console.log("Application starting");
+
+  //useAuth is a React Context Hook
   const { user, isSignedIn, isLoading: authLoading } = useAuth();
 
   console.log("🔍 AppContent render state:", {
@@ -172,9 +189,11 @@ export default function App() {
   console.log("🚀 RELEASE BUILD - NEW VERSION - " + new Date().toISOString());
 
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

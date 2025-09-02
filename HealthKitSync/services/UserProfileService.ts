@@ -175,6 +175,7 @@ export class UserProfileService {
     }
   }
 
+  //Refreshes the user profile if it hasn’t been refreshed within the past 1 day.
   static async refreshUserProfileIfNeeded(): Promise<void> {
     try {
       const currentUser = await this.getCurrentUser();

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { TouchableOpacity, View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  HealthAPIService,
-  RestingHeartRate,
-} from "../../services/HealthAPIService";
+import { RestingHeartRate } from "../../services/HealthAPIService";
 import { useAuth } from "../../context/AuthContext";
+import { useRestingHeartRate } from "../../hooks/useHealthData";
 
 interface RestingHRWidgetProps {
   selectedDate: Date;
@@ -17,35 +15,33 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
   onPress,
 }) => {
   const { user } = useAuth();
-  const [rhrData, setRhrData] = useState<RestingHeartRate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const dateStr = selectedDate.toISOString().split("T")[0];
+  const userId = user ? `google_${user.id}` : "";
 
-  useEffect(() => {
-    if (!user) return;
+  // Use TanStack Query hook for data fetching
+  const {
+    data: rhrDataArray,
+    isLoading,
+    error,
+    isFetching,
+  } = useRestingHeartRate(dateStr, dateStr, userId, !!user);
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const dateStr = selectedDate.toISOString().split("T")[0];
-        const data = await HealthAPIService.getRestingHeartRate(
-          dateStr,
-          dateStr,
-          `google_${user.id}`
-        );
+  // Find data for the selected date
+  const rhrData =
+    rhrDataArray?.find((item) => item.local_date === dateStr) || null;
 
-        // Find data for the selected date
-        const dayData = data.find((item) => item.local_date === dateStr);
-        setRhrData(dayData || null);
-      } catch (error) {
-        console.error("Error fetching RHR data:", error);
-        setRhrData(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedDate, user]);
+  // Debug logging
+  React.useEffect(() => {
+    if (user && rhrDataArray) {
+      console.log(
+        `💓 RestingHRWidget: Received ${rhrDataArray.length} RHR records for ${dateStr}`
+      );
+      console.log(`💓 RestingHRWidget: Found data for ${dateStr}:`, rhrData);
+    }
+    if (error) {
+      console.error("❌ RestingHRWidget: Error fetching RHR data:", error);
+    }
+  }, [rhrDataArray, rhrData, error, user, dateStr]);
 
   const getStatusColor = (rhr: number) => {
     if (rhr < 50) return "#34C759"; // Green - excellent
@@ -75,6 +71,14 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
             />
             <Text className="text-base font-semibold text-gray-900">RHR</Text>
           </View>
+          {isFetching && !isLoading && (
+            <Ionicons
+              name="refresh"
+              size={16}
+              color="#8E8E93"
+              style={{ opacity: 0.6 }}
+            />
+          )}
         </View>
 
         <View className="flex-1 justify-center items-center">
@@ -82,6 +86,13 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
             <View className="items-center space-y-1">
               <Text className="text-4xl font-bold text-gray-400">--</Text>
               <Text className="text-sm text-gray-400">Loading...</Text>
+            </View>
+          ) : error ? (
+            <View className="items-center space-y-1">
+              <Text className="text-4xl font-bold text-red-400">!</Text>
+              <Text className="text-xs text-red-400 text-center">
+                Error loading{"\n"}RHR data
+              </Text>
             </View>
           ) : rhrData ? (
             <View className="items-center space-y-1">
@@ -102,7 +113,9 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
           ) : (
             <View className="items-center space-y-1">
               <Text className="text-4xl font-bold text-gray-400">--</Text>
-              <Text className="text-sm text-gray-400">No data</Text>
+              <Text className="text-xs text-gray-400 text-center">
+                No RHR data{"\n"}for this date
+              </Text>
             </View>
           )}
         </View>

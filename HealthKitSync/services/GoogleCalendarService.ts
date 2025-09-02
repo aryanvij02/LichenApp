@@ -135,14 +135,25 @@ class GoogleCalendarService {
    */
   async getEventsForDate(date: string, calendarId: string = 'primary'): Promise<CalendarEvent[]> {
     try {
-      const startOfDay = new Date(date);
+      // Parse date as local date to avoid timezone issues
+      // date is in YYYY-MM-DD format
+      const [year, month, day] = date.split('-').map(Number);
+      
+      //Using separate year, month, day variables makes javascript use your system's local timezone
+      const startOfDay = new Date(year, month - 1, day); // month is 0-indexed
       startOfDay.setHours(0, 0, 0, 0);
       
-      const endOfDay = new Date(date);
+      const endOfDay = new Date(year, month - 1, day); // month is 0-indexed
       endOfDay.setHours(23, 59, 59, 999);
 
       const timeMin = startOfDay.toISOString();
       const timeMax = endOfDay.toISOString();
+
+      console.log(`📅 GoogleCalendarService: Fetching events for ${date}`);
+      console.log(`   - Start of day (local): ${startOfDay.toLocaleString()}`);
+      console.log(`   - End of day (local): ${endOfDay.toLocaleString()}`);
+      console.log(`   - timeMin (UTC): ${timeMin}`);
+      console.log(`   - timeMax (UTC): ${timeMax}`);
 
       return await this.getEvents(calendarId, timeMin, timeMax);
     } catch (error) {
@@ -156,8 +167,18 @@ class GoogleCalendarService {
    */
   async getEventsForDateRange(startDate: string, endDate: string, calendarId: string = 'primary'): Promise<CalendarEvent[]> {
     try {
-      const timeMin = new Date(startDate).toISOString();
-      const timeMax = new Date(endDate).toISOString();
+      // Parse dates as local dates to avoid timezone issues
+      const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+      
+      const startDateTime = new Date(startYear, startMonth - 1, startDay); // month is 0-indexed
+      startDateTime.setHours(0, 0, 0, 0);
+      
+      const endDateTime = new Date(endYear, endMonth - 1, endDay); // month is 0-indexed
+      endDateTime.setHours(23, 59, 59, 999);
+
+      const timeMin = startDateTime.toISOString();
+      const timeMax = endDateTime.toISOString();
 
       return await this.getEvents(calendarId, timeMin, timeMax);
     } catch (error) {

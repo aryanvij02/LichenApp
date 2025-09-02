@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ScrollView, View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DateSelector } from "../components/common/DateSelector";
 import { LiveHeartRateWidget } from "../components/health-widgets/LiveHeartRateWidget";
 import { RestingHRWidget } from "../components/health-widgets/RestingHRWidget";
 import { StepsWidget } from "../components/health-widgets/StepsWidget";
@@ -31,7 +32,11 @@ export const BiologyScreen: React.FC = () => {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Biology</Text>
+          <DateSelector
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+          />
+          <View />
         </View>
 
         {/* Content */}
@@ -40,6 +45,11 @@ export const BiologyScreen: React.FC = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
+          {/* Page Title */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.headerTitle}>Biology</Text>
+          </View>
+
           {/* Main Health Widgets - 2x2 Grid */}
           <View style={styles.widgetsContainer}>
             <View style={styles.widgetRow}>
@@ -95,8 +105,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
-    paddingVertical: 20,
-    paddingTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
   },
   headerTitle: {
     fontSize: 32,
@@ -108,6 +120,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 24,
+  },
+  titleContainer: {
+    marginBottom: 24,
   },
   widgetsContainer: {
     gap: 16,

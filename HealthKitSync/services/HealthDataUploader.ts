@@ -1,3 +1,11 @@
+// ⚠️ DEPRECATED: This JavaScript uploader has been replaced with native Swift implementation
+// See: HealthKitSync/modules/expo-healthkit-bridge/ios/HealthDataUploader.swift
+// 
+// This file is kept for reference and manual historical uploads only.
+// Real-time background uploads now happen natively in Swift for better performance.
+//
+//Manages all Health Data Uploads by hitting our API Gateway Endpoint
+
 interface UploadConfig {
   apiUrl: string;
   userId: string;
@@ -15,6 +23,8 @@ interface HealthSample {
   metadata?: any;
 }
 
+//This is what an UploadBatch type is
+//Our Lambda function should receive this, and manage the sorting etc.
 interface UploadBatch {
   user_id: string;
   batch_type: 'historical' | 'realtime';
@@ -189,6 +199,20 @@ export class HealthDataUploader {
 
   /**
    * Queue samples from real-time streaming for batch upload
+   * 
+   * BATCHING STRATEGY:
+   * - Samples are queued locally (not uploaded immediately)
+   * - Upload triggers:
+   *   1. QUEUE SIZE: 50+ samples → immediate batch upload
+   *   2. TIME INTERVAL: 5-minute timer → flush remaining samples
+   * - Each batch upload contains 1-100 samples (API optimized)
+   * - Includes retry logic and deduplication handling
+   * 
+   * FREQUENCY:
+   * - Data streams: Real-time (as HealthKit receives it)
+   * - Queue checks: Every new sample
+   * - Batch uploads: When 50+ samples OR every 5 minutes
+   * - API calls: Significantly reduced vs per-sample uploads
    */
   queueStreamingSamples(streamEvent: {type: string, samples: HealthSample[], timestamp: string}) {
     if (streamEvent.samples.length === 0) {
@@ -198,15 +222,27 @@ export class HealthDataUploader {
     this.uploadQueue.push(...streamEvent.samples);
     console.log(`📥 Queued ${streamEvent.samples.length} ${streamEvent.type} samples. Queue size: ${this.uploadQueue.length}`);
 
-    // Auto-upload when queue gets large enough (configurable)
-    if (this.uploadQueue.length >= 50) {
-      console.log('🚀 Queue threshold reached, triggering upload');
+    // Auto-upload when queue gets large enough (configurable threshold)
+    const BATCH_SIZE_THRESHOLD = 50;
+    if (this.uploadQueue.length >= BATCH_SIZE_THRESHOLD) {
+      console.log(`🚀 Queue threshold reached (${BATCH_SIZE_THRESHOLD}+ samples), triggering immediate batch upload`);
       this.flushQueue();
     }
   }
 
   /**
    * Upload all queued samples immediately
+   * 
+   * Called by:
+   * 1. Automatic queue threshold (50+ samples)
+   * 2. 5-minute timer interval (SettingsScreen)
+   * 3. Manual flush (user-triggered)
+   * 
+   * Process:
+   * - Takes snapshot of current queue
+   * - Clears queue immediately (prevents duplicates)
+   * - Uploads in single batch with retry logic
+   * - Handles network failures gracefully
    */
   async flushQueue(): Promise<boolean> {
     if (this.isUploading || this.uploadQueue.length === 0) {
@@ -233,6 +269,7 @@ export class HealthDataUploader {
    */
   private async uploadWithRetry(batch: UploadBatch, maxRetries = 3): Promise<any> {
     let lastError;
+    const uploadUrl = `${this.config.apiUrl}/upload-health-data`; // Move outside try block
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -247,7 +284,6 @@ export class HealthDataUploader {
 
         const headers = { ...baseHeaders, ...authHeaders };
 
-        const uploadUrl = `${this.config.apiUrl}/upload-health-data`;
         console.log(`🔗 Attempting upload to: ${uploadUrl}`);
         console.log(`📤 Request method: POST`);
         console.log(`📋 Request headers:`, headers);

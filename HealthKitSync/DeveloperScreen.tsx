@@ -20,7 +20,15 @@ import {
 import { useAuth } from "./context/AuthContext";
 
 interface SyncEvent {
-  phase: "permissions" | "observer" | "anchored" | "upload";
+  phase:
+    | "permissions"
+    | "observer"
+    | "anchored"
+    | "upload"
+    | "historical"
+    | "uploading"
+    | "completed"
+    | "failed";
   message: string;
   counts?: {
     added?: number;
@@ -82,8 +90,11 @@ export const DeveloperScreen: React.FC = () => {
     });
 
     // Subscribe to streaming data
+    // ⚠️ DEPRECATED: JavaScript streaming has been replaced with native Swift uploads
+    // This code is kept for debugging purposes only - real uploads now happen in Swift
+    // See SettingsScreen for native uploader configuration
     const streamSubscription = HealthKitBridge.onDataStream((event) => {
-      console.log("🌊 STREAMING DATA:", event);
+      console.log("🌊 DEPRECATED STREAMING DATA:", event);
       console.log(
         `📱 Received ${event.samples.length} new samples for ${event.type}`
       );
@@ -96,18 +107,18 @@ export const DeveloperScreen: React.FC = () => {
         );
       });
 
-      // Queue new samples for upload
-      if (uploaderInstance && event.samples.length > 0) {
-        uploaderInstance.queueStreamingSamples(event);
-      }
+      // Queue new samples for upload (DISABLED - now handled in Swift)
+      // if (uploaderInstance && event.samples.length > 0) {
+      //   uploaderInstance.queueStreamingSamples(event);
+      // }
     });
 
-    // Auto-flush queue every 5 minutes
-    const flushInterval = setInterval(() => {
-      if (uploaderInstance) {
-        uploaderInstance.flushQueue();
-      }
-    }, 5 * 60 * 1000); // 5 minutes
+    // Auto-flush queue every 5 minutes (DISABLED - now handled in Swift)
+    // const flushInterval = setInterval(() => {
+    //   if (uploaderInstance) {
+    //     uploaderInstance.flushQueue();
+    //   }
+    // }, 5 * 60 * 1000); // 5 minutes
 
     // Load initial sync status
     loadSyncStatus();
@@ -115,7 +126,6 @@ export const DeveloperScreen: React.FC = () => {
     return () => {
       syncSubscription?.remove();
       streamSubscription?.remove();
-      clearInterval(flushInterval);
     };
   }, [user]);
 
@@ -205,7 +215,20 @@ export const DeveloperScreen: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await HealthKitBridge.startBackgroundSync(permissions);
+      // Enhanced sync types: include ECG even if not explicitly granted
+      const syncTypes = [...permissions];
+      const allAvailableTypes = HealthKitBridge.getAvailableTypes();
+      if (
+        allAvailableTypes.includes("HKElectrocardiogramType") &&
+        !syncTypes.includes("HKElectrocardiogramType")
+      ) {
+        syncTypes.push("HKElectrocardiogramType");
+        console.log(
+          "🫀 Added ECG to developer background sync (device compatible)"
+        );
+      }
+
+      await HealthKitBridge.startBackgroundSync(syncTypes);
       setIsSyncActive(true);
       Alert.alert("Success", "Background sync started");
     } catch (error) {
@@ -243,7 +266,18 @@ export const DeveloperScreen: React.FC = () => {
   const handleSyncNow = async () => {
     setIsLoading(true);
     try {
-      const result = await HealthKitBridge.syncNow(permissions);
+      // Enhanced sync types: include ECG even if not explicitly granted
+      const syncTypes = [...permissions];
+      const allAvailableTypes = HealthKitBridge.getAvailableTypes();
+      if (
+        allAvailableTypes.includes("HKElectrocardiogramType") &&
+        !syncTypes.includes("HKElectrocardiogramType")
+      ) {
+        syncTypes.push("HKElectrocardiogramType");
+        console.log("🫀 Added ECG to manual sync (device compatible)");
+      }
+
+      const result = await HealthKitBridge.syncNow(syncTypes);
       await loadSyncStatus(); // Refresh status
 
       Alert.alert(
@@ -254,6 +288,196 @@ export const DeveloperScreen: React.FC = () => {
     } catch (error) {
       console.error("Manual sync failed:", error);
       Alert.alert("Error", "Failed to perform manual sync");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSimpleECGDebug = async () => {
+    setIsLoading(true);
+    try {
+      console.log("🔍 Simple ECG Debug - checking raw permission status...");
+      const result = await HealthKitBridge.simpleECGDebug();
+
+      console.log("🔍 Raw ECG Debug Result:", JSON.stringify(result, null, 2));
+
+      let message = "ECG Permission Test (Source of Truth):\n\n";
+
+      if (!result.ios_version_ok) {
+        message += "❌ iOS version not compatible";
+      } else {
+        message += `ECG Authorization Status: ${result.ecg_authorization_status} (unreliable)\n`;
+        message += `ECG Can Query Data: ${result.ecg_can_query_data} (source of truth)\n`;
+        message += `Heart Rate Authorization Status: ${result.heart_rate_authorization_status} (unreliable)\n`;
+        message += `Heart Rate Can Query Data: ${result.heart_rate_can_query_data} (source of truth)\n\n`;
+
+        if (result.permission_logic_working) {
+          message += "✅ ECG PERMISSION WORKING!\n";
+          message += "Can actually query ECG data despite status=1\n\n";
+          message += "🎯 Issue is likely in sync logic, not permissions";
+        } else {
+          message += "❌ ECG PERMISSION TRULY DENIED\n";
+          message += "Cannot query ECG data\n\n";
+          message += "🔧 Need to fix actual permission grant";
+        }
+
+        if (result.both_can_query) {
+          message += "\n✅ Both ECG and Heart Rate can be queried";
+        } else {
+          message += "\n⚠️ Some data types cannot be queried";
+        }
+      }
+
+      Alert.alert("Raw ECG Status", message, [{ text: "OK" }]);
+    } catch (error) {
+      console.error("❌ Simple ECG debug failed:", error);
+      Alert.alert(
+        "Error",
+        `Debug failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTestECGQuery = async () => {
+    setIsLoading(true);
+    try {
+      const now = new Date();
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+      console.log("🫀 Testing ECG data query...");
+      const ecgData = await HealthKitBridge.queryECGData(
+        twoHoursAgo.toISOString(),
+        now.toISOString(),
+        5
+      );
+
+      console.log(`✅ Found ${ecgData.length} ECG samples`);
+
+      let message = `ECG Query Results:\n\n`;
+      message += `Found: ${ecgData.length} ECG samples\n\n`;
+
+      if (ecgData.length > 0) {
+        const latest = ecgData[0];
+        message += `Latest ECG:\n`;
+        message += `• Classification: ${latest.ecgClassification}\n`;
+        message += `• Symptoms: ${latest.symptomsStatus}\n`;
+        message += `• Heart Rate: ${latest.averageHeartRate} bpm\n`;
+        message += `• Voltage Points: ${latest.voltagePoints?.length || 0}\n`;
+        message += `• Date: ${latest.startDate}`;
+
+        console.log("📊 Latest ECG details:", latest);
+      } else {
+        message += "No ECG data found. Try:\n";
+        message += "1. Take manual ECG on Apple Watch\n";
+        message += "2. Wait 2-3 minutes\n";
+        message += "3. Try again";
+      }
+
+      Alert.alert("ECG Query Results", message, [{ text: "OK" }]);
+    } catch (error) {
+      console.error("❌ ECG query failed:", error);
+      Alert.alert(
+        "Error",
+        `ECG query failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleECGOnlyUpload = async () => {
+    setIsLoading(true);
+    try {
+      console.log("🫀 Starting ECG-ONLY debug pipeline...");
+
+      // Step 1: Quick ECG status check
+      console.log("📋 Step 1: Checking ECG status...");
+      const debugInfo = await HealthKitBridge.simpleECGDebug();
+      console.log("🔍 Simple ECG Debug:", debugInfo);
+
+      if (!debugInfo.ios_version_ok) {
+        Alert.alert("Error", "Device not compatible with ECG (need iOS 12.2+)");
+        return;
+      }
+
+      if (!debugInfo.permission_logic_working) {
+        Alert.alert(
+          "Error",
+          `ECG permission issue: Cannot query ECG data\nPlease grant ECG permission first`
+        );
+        return;
+      }
+
+      // Step 2: Query ECG data
+      console.log("📋 Step 2: Querying ECG data...");
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const ecgData = await HealthKitBridge.queryECGData(
+        yesterday.toISOString(),
+        now.toISOString(),
+        10 // Max 10 ECG samples
+      );
+
+      console.log(`📊 Found ${ecgData.length} ECG samples`);
+
+      if (ecgData.length === 0) {
+        Alert.alert(
+          "No ECG Data",
+          "No ECG data found in last 24 hours.\n\n1. Take manual ECG on Apple Watch\n2. Wait 2-3 minutes\n3. Try again"
+        );
+        return;
+      }
+
+      // Step 3: Upload ECG data only
+      console.log("📋 Step 3: Uploading ECG data to API...");
+      console.log(
+        "📤 ECG samples to upload:",
+        ecgData.map((ecg) => ({
+          uuid: ecg.uuid,
+          classification: ecg.ecgClassification,
+          startDate: ecg.startDate,
+          voltagePoints: ecg.voltagePoints?.length || 0,
+        }))
+      );
+
+      const uploadResult = await HealthKitBridge.uploadDateRange(
+        ["HKElectrocardiogramType"], // ECG ONLY
+        yesterday.toISOString(),
+        now.toISOString()
+      );
+
+      console.log("📋 Step 4: Upload result:", uploadResult);
+
+      // Step 4: Show results
+      let message = `ECG-Only Upload Results:\n\n`;
+      message += `✅ Success: ${uploadResult.success}\n`;
+      message += `📊 Samples Found: ${uploadResult.samplesFound}\n`;
+      message += `📤 Samples Uploaded: ${uploadResult.samplesUploaded}\n`;
+      message += `📋 Message: ${uploadResult.message}\n\n`;
+
+      if (uploadResult.success) {
+        message += `🎉 ECG data successfully sent to API!\n`;
+        message += `Check your API logs for ECG data.`;
+      } else {
+        message += `❌ Upload failed. Check console for details.`;
+      }
+
+      Alert.alert("ECG Upload Complete", message, [{ text: "OK" }]);
+    } catch (error) {
+      console.error("❌ ECG-only upload failed:", error);
+      Alert.alert(
+        "Error",
+        `ECG upload failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -321,7 +545,18 @@ export const DeveloperScreen: React.FC = () => {
   const handleFreshSync = async () => {
     setIsLoading(true);
     try {
-      const result = await HealthKitBridge.resetAnchorsAndSync(permissions);
+      // Enhanced sync types: include ECG even if not explicitly granted
+      const syncTypes = [...permissions];
+      const allAvailableTypes = HealthKitBridge.getAvailableTypes();
+      if (
+        allAvailableTypes.includes("HKElectrocardiogramType") &&
+        !syncTypes.includes("HKElectrocardiogramType")
+      ) {
+        syncTypes.push("HKElectrocardiogramType");
+        console.log("🫀 Added ECG to fresh sync (device compatible)");
+      }
+
+      const result = await HealthKitBridge.resetAnchorsAndSync(syncTypes);
       Alert.alert(
         "Fresh Sync Complete",
         `Found ${result.added} total samples\nCheck console for sample details`
@@ -673,6 +908,31 @@ export const DeveloperScreen: React.FC = () => {
             ) : (
               <Text style={styles.buttonText}>Refresh Status</Text>
             )}
+          </TouchableOpacity>
+
+          {/* Simple ECG Debug */}
+          <TouchableOpacity
+            style={[styles.button, styles.warningButton]}
+            onPress={handleSimpleECGDebug}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>🔍 Simple ECG Debug</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton]}
+            onPress={handleTestECGQuery}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>🫀 Test ECG Query</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.uploadButton]}
+            onPress={handleECGOnlyUpload}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>🫀 ECG ONLY Upload</Text>
           </TouchableOpacity>
           {/* Add these after your existing buttons */}
           <TouchableOpacity

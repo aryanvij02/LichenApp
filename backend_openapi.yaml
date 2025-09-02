@@ -1,0 +1,1051 @@
+openapi: 3.0.3
+info:
+  title: LichenHealth Backend API
+  description: |
+    Backend API for the LichenHealth mobile application providing endpoints for health data management including steps, heart rate, resting heart rate, and sleep data.
+
+    FRONTEND INTEGRATION NOTES:
+    - All endpoints return JSON responses
+    - Use Content-Type: application/json for requests
+    - All timestamps are in UTC timezone
+    - Pagination is not currently implemented
+    - Rate limiting is not enforced
+
+    AUTHENTICATION:
+    Currently optional. Include user_id as query parameter when available.
+    Future versions will require authentication headers.
+
+    DATA FORMATS:
+    - Dates: YYYY-MM-DD format (ISO 8601)
+    - Timestamps: ISO 8601 format with timezone (e.g., 2024-01-15T08:00:00Z)
+    - UUIDs: Standard UUID v4 format
+    - All numeric values have min/max constraints
+    - String fields have length limits
+
+    ERROR RESPONSES:
+    All error responses follow this format:
+    {
+      "detail": "Error description string"
+    }
+
+    HTTP STATUS CODES:
+    - 200: Success
+    - 400: Bad Request - Invalid parameters or data format
+    - 500: Internal Server Error - Database or server errors
+    - 503: Service Unavailable - Health check failures
+
+    TESTING ENDPOINTS:
+    Each service has a /test endpoint for database connectivity verification.
+    Use these for health monitoring and debugging.
+  version: 1.0.0
+  contact:
+    name: LichenHealth Team
+  license:
+    name: MIT
+
+servers:
+  - url: https://api.lichenhealth.com
+    description: Production server
+  - url: http://localhost:8000
+    description: Development server
+
+tags:
+  - name: system
+    description: System health and monitoring endpoints
+  - name: steps
+    description: Step count and activity data
+  - name: heart-rate
+    description: Heart rate monitoring data
+  - name: resting-heart-rate
+    description: Resting heart rate measurements
+  - name: sleep
+    description: Sleep analysis and stage data
+
+paths:
+  /:
+    get:
+      tags:
+        - system
+      summary: API Root
+      description: Get basic API information and status
+      responses:
+        "200":
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "LichenHealth Backend API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  environment:
+                    type: string
+                    example: "production"
+                  status:
+                    type: string
+                    example: "running"
+
+  /health:
+    get:
+      tags:
+        - system
+      summary: Health Check
+      description: Enhanced health check endpoint for load balancers and monitoring
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  environment:
+                    type: string
+                    example: "production"
+                  database:
+                    type: string
+                    example: "connected"
+                  timestamp:
+                    type: number
+                    format: float
+                    example: 1674123456.789
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /metrics:
+    get:
+      tags:
+        - system
+      summary: System Metrics
+      description: Basic metrics endpoint for monitoring system performance
+      responses:
+        "200":
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  database_pool:
+                    type: object
+                    properties:
+                      size:
+                        type: integer
+                        example: 10
+                      available:
+                        type: integer
+                        example: 8
+                      used:
+                        type: integer
+                        example: 2
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  environment:
+                    type: string
+                    example: "production"
+
+  /api/v1/steps/:
+    get:
+      tags:
+        - steps
+      summary: Get Steps Data
+      description: Retrieve steps data for a specific date
+      parameters:
+        - name: local_date
+          in: query
+          required: true
+          description: Date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+            example: "2024-01-15"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Steps data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StepsResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/steps/range:
+    get:
+      tags:
+        - steps
+      summary: Get Steps Data Range
+      description: Retrieve steps data for a date range
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          description: Start date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: end_date
+          in: query
+          required: true
+          description: End date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Steps range data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StepsRangeResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/steps/intervals:
+    get:
+      tags:
+        - steps
+      summary: Get Step Intervals
+      description: Retrieve raw step intervals for a specific date
+      parameters:
+        - name: local_date
+          in: query
+          required: true
+          description: Date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+            example: "2024-01-15"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Step intervals retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StepIntervalResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/steps/test:
+    get:
+      tags:
+        - steps
+      summary: Test Steps Database Connection
+      description: Test database connection for steps service
+      responses:
+        "200":
+          description: Database connection successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestConnectionResponse"
+        "500":
+          description: Database connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/heart-rate/:
+    get:
+      tags:
+        - heart-rate
+      summary: Get Heart Rate Data
+      description: Retrieve heart rate readings for a specific time range
+      parameters:
+        - name: start_time
+          in: query
+          required: true
+          description: Start time in ISO format
+          schema:
+            type: string
+            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+            example: "2024-01-15T00:00:00Z"
+        - name: end_time
+          in: query
+          required: true
+          description: End time in ISO format
+          schema:
+            type: string
+            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+            example: "2024-01-15T23:59:59Z"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Heart rate data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HeartRateResponse"
+        "400":
+          description: Invalid time format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/heart-rate/average:
+    get:
+      tags:
+        - heart-rate
+      summary: Get Average Heart Rate
+      description: Retrieve average heart rate for a specific time range
+      parameters:
+        - name: start_time
+          in: query
+          required: true
+          description: Start time in ISO format
+          schema:
+            type: string
+            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+            example: "2024-01-15T00:00:00Z"
+        - name: end_time
+          in: query
+          required: true
+          description: End time in ISO format
+          schema:
+            type: string
+            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+            example: "2024-01-15T23:59:59Z"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Average heart rate data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeartRateAverageResponse"
+        "400":
+          description: Invalid time format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/heart-rate/test:
+    get:
+      tags:
+        - heart-rate
+      summary: Test Heart Rate Database Connection
+      description: Test database connection for heart rate service
+      responses:
+        "200":
+          description: Database connection successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestConnectionResponse"
+        "500":
+          description: Database connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/resting-heart-rate/:
+    get:
+      tags:
+        - resting-heart-rate
+      summary: Get Resting Heart Rate Data
+      description: Retrieve resting heart rate data for a specific date or date range
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          description: Start date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+            example: "2024-01-15"
+        - name: end_date
+          in: query
+          required: false
+          description: End date in YYYY-MM-DD format (optional for single date)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Resting heart rate data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RestingHeartRateResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/resting-heart-rate/test:
+    get:
+      tags:
+        - resting-heart-rate
+      summary: Test Resting Heart Rate Database Connection
+      description: Test database connection for resting heart rate service
+      responses:
+        "200":
+          description: Database connection successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestConnectionResponse"
+        "500":
+          description: Database connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sleep/:
+    get:
+      tags:
+        - sleep
+      summary: Get Sleep Stages
+      description: Retrieve sleep stages for a specific date
+      parameters:
+        - name: local_date
+          in: query
+          required: true
+          description: Date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+            example: "2024-01-15"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Sleep stages data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SleepStageResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sleep/summary:
+    get:
+      tags:
+        - sleep
+      summary: Get Sleep Summary
+      description: Retrieve aggregated sleep summary for a specific date
+      parameters:
+        - name: local_date
+          in: query
+          required: true
+          description: Date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+            example: "2024-01-15"
+        - name: user_id
+          in: query
+          required: false
+          description: User ID filter - alphanumeric string
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "user123"
+      responses:
+        "200":
+          description: Sleep summary data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SleepSummaryResponse"
+        "400":
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sleep/test:
+    get:
+      tags:
+        - sleep
+      summary: Test Sleep Database Connection
+      description: Test database connection for sleep service
+      responses:
+        "200":
+          description: Database connection successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestConnectionResponse"
+        "500":
+          description: Database connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    StepsResponse:
+      type: object
+      required:
+        - user_id
+        - local_date
+        - total_steps
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        local_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        total_steps:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          example: 10000
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    StepsRangeResponse:
+      type: object
+      required:
+        - user_id
+        - local_date
+        - total_steps
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        local_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        total_steps:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          example: 10000
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    StepIntervalResponse:
+      type: object
+      required:
+        - user_id
+        - interval_uuid
+        - start_time
+        - end_time
+        - step_count
+        - unit
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        interval_uuid:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T08:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T08:05:00Z"
+        step_count:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          example: 150
+        unit:
+          type: string
+          example: "count"
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    HeartRateResponse:
+      type: object
+      required:
+        - user_id
+        - reading_uuid
+        - timestamp
+        - heart_rate
+        - unit
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        reading_uuid:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T08:00:00Z"
+        heart_rate:
+          type: integer
+          minimum: 30
+          maximum: 250
+          example: 75
+        unit:
+          type: string
+          example: "count/min"
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    HeartRateAverageResponse:
+      type: object
+      required:
+        - start_time
+        - end_time
+        - average_heart_rate
+        - total_readings
+        - min_heart_rate
+        - max_heart_rate
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          example: "user123"
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T00:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T23:59:59Z"
+        average_heart_rate:
+          type: number
+          format: float
+          example: 72.5
+        total_readings:
+          type: integer
+          example: 1440
+        min_heart_rate:
+          type: integer
+          example: 45
+        max_heart_rate:
+          type: integer
+          example: 150
+
+    RestingHeartRateResponse:
+      type: object
+      required:
+        - user_id
+        - reading_uuid
+        - timestamp
+        - local_date
+        - resting_heart_rate
+        - unit
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        reading_uuid:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T06:00:00Z"
+        local_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        resting_heart_rate:
+          type: integer
+          minimum: 30
+          maximum: 150
+          example: 55
+        unit:
+          type: string
+          example: "count/min"
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    SleepStageResponse:
+      type: object
+      required:
+        - user_id
+        - stage_uuid
+        - start_time
+        - end_time
+        - sleep_stage
+        - hk_value
+        - source_name
+        - upload_timestamp
+        - created_at
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          example: "user123"
+        stage_uuid:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T22:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T22:30:00Z"
+        sleep_stage:
+          type: string
+          enum: [AWAKE, REM, CORE, DEEP]
+          example: "DEEP"
+        hk_value:
+          type: integer
+          example: 4
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Apple Watch"
+        upload_timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-16T08:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-16T08:00:00Z"
+
+    SleepSummaryResponse:
+      type: object
+      required:
+        - local_date
+        - total_sleep_duration
+        - sleep_stages_breakdown
+        - sleep_efficiency
+        - total_stages_count
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          example: "user123"
+        local_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        total_sleep_duration:
+          type: integer
+          description: Total sleep duration in minutes
+          example: 480
+        sleep_stages_breakdown:
+          type: object
+          description: Sleep stages breakdown in minutes
+          additionalProperties:
+            type: integer
+          example:
+            CORE: 180
+            REM: 90
+            DEEP: 120
+            AWAKE: 90
+        sleep_efficiency:
+          type: number
+          format: float
+          description: Sleep efficiency percentage (0-100)
+          example: 85.5
+        sleep_start_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-01-15T22:00:00Z"
+        sleep_end_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-01-16T06:00:00Z"
+        total_stages_count:
+          type: integer
+          example: 16
+
+    TestConnectionResponse:
+      type: object
+      required:
+        - message
+        - total_records
+      properties:
+        message:
+          type: string
+          example: "Database connection successful"
+        total_records:
+          type: integer
+          example: 1500
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: "Invalid date format. Expected YYYY-MM-DD"

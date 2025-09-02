@@ -137,8 +137,8 @@ interface DummyData {
 const dummyData: DummyData = require('../assets/data/dummy-health-data.json');
 
 export class HealthAPIService {
-  private static readonly API_BACKEND_URL = Constants.expoConfig?.extra?.apiBackendUrl || 'https://your-backend-url.com';
-  private static readonly USE_DUMMY_DATA = true; // Set to false when you want to use real API
+  private static readonly API_BACKEND_URL = Constants.expoConfig?.extra?.apiBackendUrl || 'http://35.92.117.44';
+  private static readonly USE_DUMMY_DATA = false; // Set to false when you want to use real API
 
   // Helper function to simulate API delay
   private static async simulateDelay(ms: number = 300): Promise<void> {
@@ -168,20 +168,41 @@ export class HealthAPIService {
   private static async makeRequest(endpoint: string, params: Record<string, string> = {}) {
     const url = new URL(`${this.API_BACKEND_URL}${endpoint}`);
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
+      if (value) { // Only add non-empty values
+        url.searchParams.append(key, value);
+      }
     });
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    console.log(`🌐 Making API request to: ${url.toString()}`);
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      console.log(`📡 API Response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API request failed: ${response.status} - ${errorText}`);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ API Response data:`, data);
+      return data;
+    } catch (error) {
+      console.error(`❌ API request error:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   // Now all methods should work without TypeScript errors
@@ -220,6 +241,41 @@ export class HealthAPIService {
       end_time: endTime, 
       user_id: userId 
     });
+  }
+
+  // Test HTTP vs HTTPS connectivity
+  static async testNetworkConnectivity(): Promise<void> {
+    console.log(`🔍 Testing network connectivity...`);
+    
+    // Test HTTPS with httpbin.org
+    try {
+      console.log(`🌐 Testing HTTPS with httpbin.org...`);
+      const httpsResponse = await fetch('https://httpbin.org/get');
+      const httpsData = await httpsResponse.json();
+      console.log(`✅ HTTPS test successful:`, httpsData);
+    } catch (httpsError) {
+      console.error(`❌ HTTPS test failed:`, httpsError);
+    }
+
+    // Test HTTP with httpbin.org  
+    try { 
+      console.log(`🌐 Testing HTTP with httpbin.org...`);
+      const httpResponse = await fetch('http://httpbin.org/get');
+      const httpData = await httpResponse.json();
+      console.log(`✅ HTTP test successful:`, httpData);
+    } catch (httpError) {
+      console.error(`❌ HTTP test failed:`, httpError);
+    }
+
+    // Test your backend
+    try {
+      console.log(`🌐 Testing your backend: ${this.API_BACKEND_URL}`);
+      const backendResponse = await fetch(`${this.API_BACKEND_URL}/health`);
+      const backendData = await backendResponse.json();
+      console.log(`✅ Backend test successful:`, backendData);
+    } catch (backendError) {
+      console.error(`❌ Backend test failed:`, backendError);
+    }
   }
 
   static async getRestingHeartRate(startDate: string, endDate: string, userId: string): Promise<RestingHeartRate[]> {
