@@ -108,3 +108,5 @@ yarn-error.*
 *_venv/
 *backend_venv/
 
+*export.xml
+
