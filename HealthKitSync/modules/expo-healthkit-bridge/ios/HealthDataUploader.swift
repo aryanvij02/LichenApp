@@ -3,22 +3,17 @@ import Foundation
 //Models (e.g. UploadConfig) are defined in UploadModels.swift
 class HealthDataUploader {
     private var config: UploadConfig?
-    private var uploadQueue: [RawHealthSample] = []
-    private var isUploading = false
     
     // Configuration constants
-    private let batchSizeThreshold = 10  // Trigger upload when queue reaches this size
     private let maxRetries = 3           // Maximum retry attempts for failed uploads
     private let timeoutInterval: TimeInterval = 30.0  // HTTP request timeout
     
-    // MARK: - Initialization
-    
+//--------------------------------Initialization--------------------------------
     init() {
         loadConfiguration()
     }
     
-    // MARK: - Configuration Management
-    
+//--------------------------------Configuration Management--------------------------------
     /// Load configuration from UserDefaults
     private func loadConfiguration() {
         do {
@@ -32,7 +27,7 @@ class HealthDataUploader {
     
     /// Update configuration (called from JavaScript)
     //Configuration for uploads get set, this is where the API Url also gets set
-    /////SettingsScreen calls configureUplader (in ExpoHealthkitBridgeModule.swift) which calls this
+    /////SettingsScreen calls configureUploader (in ExpoHealthkitBridgeModule.swift) which calls this
     func configure(apiUrl: String, userId: String, authHeaders: [String: String] = [:]) throws {
         guard !apiUrl.isEmpty else {
             throw UploadConfigError.missingApiUrl
@@ -53,9 +48,11 @@ class HealthDataUploader {
         uploaderLog("✅ HealthDataUploader: Configured for user \(userId) with API \(apiUrl)")
     }
     
-    // MARK: - Public Upload Methods
-    
+//--------------------------------Public Upload Methods--------------------------------
     /// Upload raw health data immediately (for real-time streaming)
+
+
+    //TODO: Include logic to handle if any ECG data is in here
     func uploadRawSamples(_ rawSamples: [[String: Any]], batchType: String = "realtime") async {
         guard !rawSamples.isEmpty else {
             uploaderLog("📭 HealthDataUploader: No samples to upload")
@@ -124,66 +121,6 @@ class HealthDataUploader {
             uploaderLog("❌ HealthDataUploader: \(message)")
             return (false, message)
         }
-    }
-    
-    /// Convenience method for date range upload with automatic data fetching
-    /// This will be called from JavaScript/TypeScript
-    func uploadDateRange(startDate: String, endDate: String, dataTypes: [String], completion: @escaping (Bool, String?) -> Void) {
-        uploaderLog("📅 HealthDataUploader: Date range upload requested from \(startDate) to \(endDate)")
-        uploaderLog("📊 HealthDataUploader: Data types: \(dataTypes.joined(separator: ", "))")
-        
-        // This is a placeholder - the actual flow will be:
-        // 1. JavaScript calls ExpoHealthkitBridgeModule.queryDataInRange()
-        // 2. Bridge module fetches data and calls uploadHistoricalData()
-        // 3. This method confirms the request was received
-        
-        completion(true, "Date range upload request received. Use queryDataInRange() to fetch and upload data.")
-    }
-    
-    /// Queue raw samples for batch upload
-    func queueRawSamples(_ rawSamples: [[String: Any]]) async {
-        guard !rawSamples.isEmpty else { return }
-        
-        // Convert to RawHealthSample objects
-        let samples = rawSamples.map { RawHealthSample(rawData: $0) }
-        
-        uploadQueue.append(contentsOf: samples)
-        uploaderLog("📥 HealthDataUploader: Queued \(rawSamples.count) raw samples. Queue size: \(uploadQueue.count)")
-        
-        // Auto-upload when queue gets large enough
-        if uploadQueue.count >= batchSizeThreshold {
-            uploaderLog("🚀 HealthDataUploader: Queue threshold reached (\(batchSizeThreshold)+ samples), triggering upload")
-            await flushQueue()
-        }
-    }
-    
-    /// Upload all queued samples immediately (mirrors JavaScript flushQueue)
-    func flushQueue() async {
-        guard !isUploading && !uploadQueue.isEmpty else {
-            uploaderLog("📭 HealthDataUploader: Nothing to flush or upload already in progress")
-            return
-        }
-        
-        guard let config = self.config else {
-            uploaderLog("❌ HealthDataUploader: No configuration available - cannot flush queue")
-            return
-        }
-        
-        isUploading = true
-        let samplesToUpload = uploadQueue
-        uploadQueue.removeAll()
-        
-        uploaderLog("🔄 HealthDataUploader: Flushing queue: \(samplesToUpload.count) raw samples")
-        
-        let success = await uploadBatch(samples: samplesToUpload, batchType: "realtime", config: config)
-        
-        if !success {
-            // Re-queue failed samples for retry
-            uploadQueue.insert(contentsOf: samplesToUpload, at: 0)
-            uploaderLog("♻️ HealthDataUploader: Re-queued \(samplesToUpload.count) samples for retry")
-        }
-        
-        isUploading = false
     }
     
     // MARK: - Private Upload Implementation
@@ -306,8 +243,7 @@ class HealthDataUploader {
         }
     }
     
-    // MARK: - Logging Helpers
-    
+//--------------------------------Logging Helpers--------------------------------
     private func logDetailedRequest(request: URLRequest, batch: RawUploadBatch) {
         uploaderLog("📤 HealthDataUploader: Request Details:")
         uploaderLog("  🎯 URL: \(request.url?.absoluteString ?? "Unknown")")

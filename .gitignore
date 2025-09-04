@@ -104,3 +104,7 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+#Virtual Environments
+*_venv/
+*backend_venv/
+

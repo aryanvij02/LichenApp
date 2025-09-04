@@ -1,3 +1,5 @@
+//TODO: Check if this is used anywhere
+
 import Constants from 'expo-constants';
 
 export interface HeartRateReading {

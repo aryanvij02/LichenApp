@@ -21,7 +21,6 @@ import { CalendarScreen } from "./screens/CalendarScreen";
 import { BiologyScreen } from "./screens/BiologyScreen";
 import { CoachScreen } from "./screens/CoachScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
-import { DeveloperScreen } from "./DeveloperScreen";
 import { HealthKitService } from "./services/HealthKitService";
 
 //This allows us to use native screen components (ios / android) instead or RN Views which improves performance
@@ -85,28 +84,6 @@ const AppContent: React.FC = () => {
           options={({ navigation }: { navigation: any }) => ({
             headerShown: true,
             title: "Settings",
-            headerStyle: {
-              backgroundColor: "#f5f5f5",
-            },
-            headerTitleStyle: {
-              fontWeight: "bold",
-            },
-            headerLeft: () => (
-              <TouchableOpacity
-                style={{ marginLeft: 15 }}
-                onPress={() => navigation.goBack()}
-              >
-                <Ionicons name="arrow-back" size={24} color="#007AFF" />
-              </TouchableOpacity>
-            ),
-          })}
-        />
-        <Stack.Screen
-          name="Developer"
-          component={DeveloperScreen}
-          options={({ navigation }: { navigation: any }) => ({
-            headerShown: true,
-            title: "Developer Tools",
             headerStyle: {
               backgroundColor: "#f5f5f5",
             },

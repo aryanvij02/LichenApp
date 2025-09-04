@@ -213,6 +213,11 @@ export const SettingsScreen: React.FC = () => {
       setHasPermissions(savedSettings.hasPermissions);
       setIsSyncActive(savedSettings.isSyncActive);
 
+      console.log(
+        "Existing Saved Permissions when loading from settings:",
+        savedSettings.permissions
+      );
+
       console.log("✅ Restored settings:", {
         permissions: savedSettings.permissions.length,
         hasPermissions: savedSettings.hasPermissions,
@@ -386,6 +391,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const performDateRangeUpload = async (typesToUpload: string[]) => {
+    console.log("These are the types to upload:", typesToUpload);
     if (!hasPermissions) {
       Alert.alert("No Permissions", "Please request permissions first");
       return;

@@ -364,7 +364,8 @@ class ExpoHealthkitBridge {
       'HKQuantityTypeIdentifierPhysicalEffort',
       
       // 🫀 ECG & Advanced Cardiac Data (iOS 14+)
-      'HKElectrocardiogramType',
+      // 'HKElectrocardiogramType',
+      'HKDataTypeIdentifierElectrocardiogram',
       
       // Categories & Sleep
       'HKCategoryTypeIdentifierSleepAnalysis',

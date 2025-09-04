@@ -129,6 +129,9 @@ class SupabaseClient:
         
         return response.json() if response.text else None
 
+
+
+
 def sync_user_profile_to_supabase(user_id: str, upload_metadata: dict, supabase: SupabaseClient):
     """Sync user profile to Supabase during health data uploads"""
     try:

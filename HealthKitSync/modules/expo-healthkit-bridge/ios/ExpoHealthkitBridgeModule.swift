@@ -45,9 +45,6 @@ public class ExpoHealthkitBridgeModule: Module {
       return try await self.uploadDateRange(types: types, startDateISO: startDateISO, endDateISO: endDateISO)
     }
 
-    AsyncFunction("queryHeartbeatSeries") { (startDateISO: String, endDateISO: String) -> [String: Any] in
-      return try await self.queryHeartbeatSeries(startDateISO: startDateISO, endDateISO: endDateISO)
-    }
 
     AsyncFunction("queryECGData") { (startDateISO: String, endDateISO: String, maxSamples: Int) -> [[String: Any]] in
       return try await self.queryECGData(startDateISO: startDateISO, endDateISO: endDateISO, maxSamples: maxSamples)
@@ -338,12 +335,16 @@ extension ExpoHealthkitBridgeModule {
 }
   
   private func healthKitTypeFromString(_ typeString: String) -> HKSampleType? {
-    // ECG type (iOS 12.2+)
-    if typeString == "HKElectrocardiogramType" {
-      if #available(iOS 12.2, *) {
-        return HKObjectType.electrocardiogramType()
-      }
+    // ECG type (iOS 12.2+) - use the actual HealthKit identifier
+    if typeString == HKObjectType.electrocardiogramType().identifier {
+      // Above gives us -> HKDataTypeIdentifierElectrocardiogram, maybe change this in 
+      return HKObjectType.electrocardiogramType()
     }
+
+    // if typeString == "HKElectrocardiogramType" {
+    //   return HKObjectType.electrocardiogramType()
+    // }
+
     
     // Quantity types
     if let quantityType = HKQuantityType.quantityType(forIdentifier: HKQuantityTypeIdentifier(rawValue: typeString)) {
@@ -546,12 +547,41 @@ private func queryDataInRange(types: [String], startDateISO: String, endDateISO:
   let daysDiff = Calendar.current.dateComponents([.day], from: validStartDate, to: validEndDate).day ?? 0
   log("📅 Date range: \(daysDiff) days")
   
+  // Check if ECG is in original types
+  //Fix1
+  let ecgIdentifier: String
+    if #available(iOS 12.2, *) {
+      ecgIdentifier = HKObjectType.electrocardiogramType().identifier
+      //HKDataTypeIdentifierElectrocardiogram
+      log("CHECKING ARYAN: THIS IS THE ECG IDENTIFIER: " + ecgIdentifier)
+    } else {
+      ecgIdentifier = ""
+    }
+
+  let hasECG = types.contains(ecgIdentifier)
+  log("🫀 ECG_DEBUG: Original types include ECG: \(hasECG)")
+  log("🫀 ECG_DEBUG: ECG identifier: \(ecgIdentifier)")
+  if hasECG {
+    log("🫀 ECG_DEBUG: ECG found in original types list")
+  }
+  
   // Limit to essential types for large date ranges
   let limitedTypes = daysDiff > 7 ? getLimitedHealthTypes(from: types) : types
   log("🎯 Processing \(limitedTypes.count) types (limited from \(types.count) due to \(daysDiff) day range)")
   
+  // Check if ECG survived the filtering
+  let hasECGAfterFilter = limitedTypes.contains(ecgIdentifier)
+  log("🫀 ECG_DEBUG: ECG included after filtering: \(hasECGAfterFilter)")
+  if daysDiff > 7 && hasECG && !hasECGAfterFilter {
+    log("🫀 ECG_DEBUG: WARNING - ECG was filtered out due to large date range!")
+  }
+  
   let healthKitTypes = limitedTypes.compactMap { typeString -> HKSampleType? in
-    return self.healthKitTypeFromString(typeString)
+    let healthKitType = self.healthKitTypeFromString(typeString)
+    if typeString == ecgIdentifier {
+      log("🫀 ECG_DEBUG: Converting ECG type string to HealthKit type: \(healthKitType?.identifier ?? "FAILED")")
+    }
+    return healthKitType
   }
   
   var allData: [String: [[String: Any]]] = [:]
@@ -560,10 +590,25 @@ private func queryDataInRange(types: [String], startDateISO: String, endDateISO:
   for (index, type) in healthKitTypes.enumerated() {
     log("📊 Processing type \(index + 1)/\(healthKitTypes.count): \(type.identifier)")
     
+    // Special logging for ECG
+    if type.identifier == ecgIdentifier {
+      log("🫀 ECG_DEBUG: Starting ECG data processing...")
+    }
+    
     do {
       let samples = try await queryHistoricalDataSafely(for: type, from: validStartDate, to: validEndDate)
       allData[type.identifier] = samples
       log("✅ Found \(samples.count) samples for \(type.identifier)")
+      
+      // Special logging for ECG results
+      if type.identifier == ecgIdentifier {
+        log("🫀 ECG_DEBUG: Successfully processed \(samples.count) ECG samples")
+        if samples.isEmpty {
+          log("🫀 ECG_DEBUG: No ECG samples found - check permissions and date range")
+        } else {
+          log("🫀 ECG_DEBUG: ECG samples will be included in upload payload")
+        }
+      }
       
       // Send progress event
       self.sendEvent("onSyncEvent", [
@@ -615,7 +660,7 @@ private func uploadDateRange(types: [String], startDateISO: String, endDateISO: 
   
   // Log data summary
   for (dataType, samples) in historicalData {
-    if dataType == "HKDataTypeIdentifierElectrocardiogram" {
+    if #available(iOS 12.2, *), dataType == HKObjectType.electrocardiogramType().identifier {
       log("🫀 Found \(samples.count) ECG samples with voltage data")
     } else {
       log("📊 Found \(samples.count) \(dataType) samples")
@@ -629,7 +674,26 @@ private func uploadDateRange(types: [String], startDateISO: String, endDateISO: 
     "samplesFound": totalSamples
   ])
   
-  // Upload the data
+  // Log final payload details before upload
+  log("📤 ECG_BATCH_DEBUG: About to upload \(totalSamples) samples to uploader.uploadHistoricalData()")
+  
+  // Calculate total payload size for debugging
+  do {
+    let payloadData = try JSONSerialization.data(withJSONObject: historicalData, options: [])
+    let payloadSizeMB = Double(payloadData.count) / 1024 / 1024
+    log("📦 ECG_BATCH_DEBUG: Total payload size: \(payloadData.count) bytes (\(String(format: "%.2f", payloadSizeMB)) MB)")
+    
+    // Log breakdown by data type
+    for (dataType, samples) in historicalData {
+      if let typeData = try? JSONSerialization.data(withJSONObject: samples, options: []) {
+        let typeSizeMB = Double(typeData.count) / 1024 / 1024
+        log("📊 ECG_BATCH_DEBUG: \(dataType): \(samples.count) samples, \(String(format: "%.2f", typeSizeMB)) MB")
+      }
+    }
+  } catch {
+    log("⚠️ ECG_BATCH_DEBUG: Could not calculate payload size: \(error)")
+  }
+  
   let uploadResult = await uploader.uploadHistoricalData(historicalData, startDate: startDateISO, endDate: endDateISO)
   
   // Prepare result
@@ -653,137 +717,6 @@ private func uploadDateRange(types: [String], startDateISO: String, endDateISO: 
   return result
 }
 
-// MARK: - Heartbeat Series Query
-@available(iOS 13.0, *)
-private func queryHeartbeatSeries(startDateISO: String, endDateISO: String) async throws -> [String: Any] {
-  log("🫀 Starting heartbeat series query from \(startDateISO) to \(endDateISO)")
-  
-  // Parse dates using the same logic as other queries
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-  
-  guard let startDate = formatter.date(from: startDateISO),
-        let endDate = formatter.date(from: endDateISO) else {
-    throw NSError(domain: "HealthKit", code: 3, userInfo: [
-      NSLocalizedDescriptionKey: "Invalid date format for heartbeat series query"
-    ])
-  }
-  
-  // Step 1: Query for HKHeartbeatSeriesSample objects
-  let heartbeatSeriesSamples = try await queryHeartbeatSeriesSamples(from: startDate, to: endDate)
-  
-  if heartbeatSeriesSamples.isEmpty {
-    log("⚠️ No heartbeat series samples found in date range")
-    return [
-      "success": true,
-      "message": "No heartbeat series data found",
-      "series_count": 0,
-      "total_beats": 0,
-      "series": []
-    ]
-  }
-  
-  log("✅ Found \(heartbeatSeriesSamples.count) heartbeat series samples")
-  
-  // Step 2: Query beat-by-beat data for each series
-  var allSeriesData: [[String: Any]] = []
-  var totalBeats = 0
-  
-  for (index, seriesSample) in heartbeatSeriesSamples.enumerated() {
-    log("🫀 Processing series \(index + 1)/\(heartbeatSeriesSamples.count): \(seriesSample.uuid)")
-    
-    let beatsData = try await queryBeatsInSeries(seriesSample)
-    totalBeats += beatsData.count
-    
-    let seriesInfo: [String: Any] = [
-      "uuid": seriesSample.uuid.uuidString,
-      "start_date": ISO8601DateFormatter().string(from: seriesSample.startDate),
-      "end_date": ISO8601DateFormatter().string(from: seriesSample.endDate),
-      "source_name": seriesSample.sourceRevision.source.name,
-      "beat_count": beatsData.count,
-      "beats": beatsData
-    ]
-    
-    allSeriesData.append(seriesInfo)
-  }
-  
-  log("✅ Heartbeat series query complete: \(allSeriesData.count) series, \(totalBeats) total beats")
-  
-  return [
-    "success": true,
-    "message": "Heartbeat series data retrieved successfully",
-    "series_count": allSeriesData.count,
-    "total_beats": totalBeats,
-    "date_range": [
-      "start": startDateISO,
-      "end": endDateISO
-    ],
-    "series": allSeriesData
-  ]
-}
-
-@available(iOS 13.0, *)
-private func queryHeartbeatSeriesSamples(from startDate: Date, to endDate: Date) async throws -> [HKHeartbeatSeriesSample] {
-  let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
-  
-  return try await withCheckedThrowingContinuation { continuation in
-    let query = HKSampleQuery(
-      sampleType: HKSeriesType.heartbeat(),
-      predicate: predicate,
-      //TODO: Maybe change this limit?
-      limit: 50, // Reasonable limit for series samples
-      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
-    ) { _, samples, error in
-      if let error = error {
-        log("❌ Heartbeat series sample query error: \(error.localizedDescription)")
-        continuation.resume(throwing: error)
-        return
-      }
-      
-      let heartbeatSamples = (samples as? [HKHeartbeatSeriesSample]) ?? []
-      log("📥 Found \(heartbeatSamples.count) heartbeat series samples")
-      continuation.resume(returning: heartbeatSamples)
-    }
-    
-    healthStore.execute(query)
-  }
-}
-
-@available(iOS 13.0, *)
-private func queryBeatsInSeries(_ seriesSample: HKHeartbeatSeriesSample) async throws -> [[String: Any]] {
-  return try await withCheckedThrowingContinuation { continuation in
-    var beatsData: [[String: Any]] = []
-    let seriesStartDate = seriesSample.startDate
-    
-    let query = HKHeartbeatSeriesQuery(heartbeatSeries: seriesSample) { query, timeSinceSeriesStart, precededByGap, done, error in
-      
-      if let error = error {
-        log("❌ Heartbeat series query error: \(error.localizedDescription)")
-        continuation.resume(throwing: error)
-        return
-      }
-      
-      // Process each beat
-      if timeSinceSeriesStart >= 0 {
-        let absoluteTime = seriesStartDate.addingTimeInterval(timeSinceSeriesStart)
-        let beatInfo: [String: Any] = [
-          "time_since_start": timeSinceSeriesStart,
-          "absolute_time": ISO8601DateFormatter().string(from: absoluteTime),
-          "preceded_by_gap": precededByGap
-        ]
-        beatsData.append(beatInfo)
-      }
-      
-      // When done, return all collected beats
-      if done {
-        log("✅ Collected \(beatsData.count) beats from series \(seriesSample.uuid)")
-        continuation.resume(returning: beatsData)
-      }
-    }
-    
-    healthStore.execute(query)
-  }
-}
 
 private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: Date, to endDate: Date) async throws -> [[String: Any]] {
   let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
@@ -841,6 +774,8 @@ private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: D
 // MARK: - Enhanced Data Dictionary
 //This converts the incoming HealthKit data into a dictionary that is JSON-serializable
 private func sampleToDictionarySafely(_ sample: HKSample) -> [String: Any]? {
+  //HKSample is the generic base class for all HealthKit data
+  //We need to handle the different types of samples differently
   // Validate sample data
   guard sample.startDate.timeIntervalSince1970 > 0,
         sample.endDate.timeIntervalSince1970 > 0,
@@ -861,7 +796,8 @@ private func sampleToDictionarySafely(_ sample: HKSample) -> [String: Any]? {
   ]
   
   // Safely handle different sample types - check most specific types first
-  if #available(iOS 12.2, *), let ecgSample = sample as? HKElectrocardiogram {
+  //--------------------------------ECG Sample Handling--------------------------------
+  if let ecgSample = sample as? HKElectrocardiogram {
     // ECG samples get basic metadata here, full voltage data via dedicated query
     dict["ecgClassification"] = ecgClassificationToString(ecgSample.classification)
     dict["symptomsStatus"] = symptomStatusToString(ecgSample.symptomsStatus)
@@ -1034,13 +970,18 @@ private func getSampleLimit(for typeIdentifier: String, days: Int) -> Int {
 
 private func getLimitedHealthTypes(from types: [String]) -> [String] {
   // For large date ranges, limit to essential types to avoid memory issues
-  let essentialTypes = [
+  var essentialTypes = [
     "HKQuantityTypeIdentifierStepCount",
     "HKQuantityTypeIdentifierHeartRate", 
     "HKQuantityTypeIdentifierActiveEnergyBurned",
     "HKCategoryTypeIdentifierSleepAnalysis",
     "HKWorkoutTypeIdentifier"
   ]
+  
+  // Add ECG type identifier if available (iOS 12.2+)
+  if #available(iOS 12.2, *) {
+    essentialTypes.append(HKObjectType.electrocardiogramType().identifier)
+  }
   
   return types.filter { essentialTypes.contains($0) }
 }
@@ -1061,7 +1002,7 @@ private func handleBackgroundUpdate(for type: HKSampleType) async {
       // Upload samples directly via Swift
       await uploader.uploadRawSamples(newSamplesDict, batchType: "realtime")
       
-      if type.identifier == "HKDataTypeIdentifierElectrocardiogram" {
+      if #available(iOS 12.2, *), type.identifier == HKObjectType.electrocardiogramType().identifier {
         log("✅ Background update: \(result.added) ECG samples with voltage data uploaded")
       } else {
         log("✅ Background update: \(result.added) \(type.identifier) samples uploaded")
@@ -1329,6 +1270,9 @@ private func queryECGVoltageData(_ ecgSample: HKElectrocardiogram) async throws 
 
 
 //--------------------------------Function that handles ECG Voltage Upload and Creates ECG Data Dictionary which is sent to Lambda --------------------------------
+//The s3Threshold below is what decides whether we upload to S3 or not
+    //Change it later on to tweak. 
+
 @available(iOS 12.2, *)
 private func ecgSampleToDictionary(_ ecgSample: HKElectrocardiogram, voltagePoints: [[String: Any]]) async -> [String: Any] {
   let formatter = ISO8601DateFormatter()
@@ -1337,7 +1281,7 @@ private func ecgSampleToDictionary(_ ecgSample: HKElectrocardiogram, voltagePoin
   var dict: [String: Any] = [
     "startDate": formatter.string(from: ecgSample.startDate),
     "endDate": formatter.string(from: ecgSample.endDate),
-    "type": "HKElectrocardiogramType",
+    "type": HKObjectType.electrocardiogramType().identifier,
     "sourceName": ecgSample.sourceRevision.source.name,
     "uuid": ecgSample.uuid.uuidString,
     "unit": "ecg"
@@ -1362,35 +1306,54 @@ private func ecgSampleToDictionary(_ ecgSample: HKElectrocardiogram, voltagePoin
     // Estimate voltage data size
     do {
       let voltageDataSize = try JSONSerialization.data(withJSONObject: voltagePoints, options: []).count
-      log("🫀 ECG voltage data size: \(voltageDataSize) bytes (\(String(format: "%.2f", Double(voltageDataSize) / 1024 / 1024)) MB)")
+      log("🫀 ECG_UPLOAD_DEBUG: ECG Sample \(ecgSample.uuid.uuidString)")
+      log("🫀 ECG_UPLOAD_DEBUG: Voltage data size: \(voltageDataSize) bytes (\(String(format: "%.2f", Double(voltageDataSize) / 1024)) KB)")
+      log("🫀 ECG_UPLOAD_DEBUG: Voltage points count: \(voltagePoints.count)")
       
-      // If voltage data is larger than 1MB, upload to S3
-      if voltageDataSize > 1024 * 1024 {
-        log("📤 Large voltage data detected, uploading to S3...")
+      // Lower threshold to 500KB to prevent batch payload issues (was 1MB)
+      let s3Threshold = 512 * 1024 // 500KB
+      log("🫀 ECG_UPLOAD_DEBUG: S3 threshold: \(s3Threshold) bytes (\(s3Threshold / 1024) KB)")
+      
+      if voltageDataSize > s3Threshold {
+        log("📤 ECG_UPLOAD_DEBUG: TRIGGERING S3 UPLOAD - voltage data (\(String(format: "%.2f", Double(voltageDataSize) / 1024)) KB) > threshold (\(s3Threshold / 1024) KB)")
         
         // Upload to S3 and get S3 key
+        log("🔗 ECG_UPLOAD_DEBUG: Calling uploader.uploadVoltageDataToS3()...")
         if let s3Key = await uploader.uploadVoltageDataToS3(voltagePoints, sampleUUID: ecgSample.uuid.uuidString) {
           // Replace voltage points with S3 reference
           dict["voltageS3Key"] = s3Key
           dict["voltageDataUploaded"] = true
-          log("✅ Voltage data uploaded to S3: \(s3Key)")
+          dict["voltagePointsCount"] = voltagePoints.count
+          log("✅ ECG_UPLOAD_DEBUG: S3 UPLOAD SUCCESS - voltage data replaced with S3 key: \(s3Key)")
+          log("🎯 ECG_UPLOAD_DEBUG: Payload size reduced from \(String(format: "%.2f", Double(voltageDataSize) / 1024)) KB to S3 reference")
         } else {
           // S3 upload failed, include smaller subset of voltage data
-          log("❌ S3 upload failed, including limited voltage data")
-          let limitedVoltagePoints = Array(voltagePoints.prefix(100)) // First 100 points only
+          log("❌ ECG_UPLOAD_DEBUG: S3 UPLOAD FAILED - falling back to truncated voltage data")
+          let limitedVoltagePoints = Array(voltagePoints.prefix(50)) // Reduced to 50 points (was 100)
+          let limitedDataSize = (try? JSONSerialization.data(withJSONObject: limitedVoltagePoints).count) ?? 0
           dict["voltagePoints"] = limitedVoltagePoints
           dict["voltageDataTruncated"] = true
           dict["originalVoltagePointsCount"] = voltagePoints.count
+          dict["voltageDataUploaded"] = false
+          log("⚠️ ECG_UPLOAD_DEBUG: Using \(limitedVoltagePoints.count) truncated voltage points (\(String(format: "%.2f", Double(limitedDataSize) / 1024)) KB)")
         }
       } else {
         // Small voltage data, include directly in payload
-        log("📦 Small voltage data, including in payload")
+        log("📦 ECG_UPLOAD_DEBUG: SMALL VOLTAGE DATA - including directly in payload (\(String(format: "%.2f", Double(voltageDataSize) / 1024)) KB < \(s3Threshold / 1024) KB threshold)")
         dict["voltagePoints"] = voltagePoints
         dict["voltageDataUploaded"] = false
       }
       
-      // Always include voltage points count for reference
-      dict["voltagePointsCount"] = voltagePoints.count
+      // Log final payload decision
+      if dict["voltageS3Key"] != nil {
+        log("🎯 ECG_UPLOAD_DEBUG: FINAL PAYLOAD - ECG sample with S3 reference (no voltage data in payload)")
+      } else if dict["voltageDataTruncated"] as? Bool == true {
+        let truncatedCount = (dict["voltagePoints"] as? [[String: Any]])?.count ?? 0
+        log("🎯 ECG_UPLOAD_DEBUG: FINAL PAYLOAD - ECG sample with \(truncatedCount) truncated voltage points")
+      } else {
+        let fullCount = (dict["voltagePoints"] as? [[String: Any]])?.count ?? 0
+        log("🎯 ECG_UPLOAD_DEBUG: FINAL PAYLOAD - ECG sample with \(fullCount) full voltage points")
+      }
       
     } catch {
       log("❌ Error processing voltage data: \(error)")
