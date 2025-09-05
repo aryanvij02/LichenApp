@@ -1,5 +1,11 @@
 //This is the configuration file for the application which Expo uses. 
 //Defined how your app is built, configured, and deployed. 
+
+// Debug environment variables during build
+console.log('🔍 Build-time environment variables:');
+console.log('EXPO_API_GATEWAY_URL:', process.env.EXPO_API_GATEWAY_URL);
+console.log('EXPO_API_BACKEND_URL:', process.env.EXPO_API_BACKEND_URL);
+
 export default {
     expo: {
       name: "HealthKit Sync",
@@ -29,7 +35,10 @@ export default {
         infoPlist: {
           NSHealthShareUsageDescription: "HealthDataExporter reads your health data to create exportable reports.",
           NSHealthUpdateUsageDescription: "HealthDataExporter does not write any data to HealthKit.",
-          UIBackgroundModes: ["background-fetch"]
+          UIBackgroundModes: ["background-fetch"],
+          NSAppTransportSecurity: {
+            NSAllowsArbitraryLoads: true
+          }
         },
         entitlements: {
           "com.apple.developer.healthkit": true,

@@ -28,31 +28,61 @@ export const LiveHeartRateWidget: React.FC<LiveHeartRateWidgetProps> = ({
   const heartBeat = useSharedValue(1);
 
   useEffect(() => {
-    // Subscribe to live heart rate updates
-    const unsubscribe = HealthKitService.subscribeToLiveHeartRate((data) => {
-      setHeartRateData(data);
-      setIsLoading(false);
+    let unsubscribe: (() => void) | undefined;
 
-      // Trigger heart beat animation when new data arrives
-      if (data) {
-        heartBeat.value = withSequence(
-          withTiming(1.2, { duration: 100 }),
-          withTiming(1, { duration: 100 }),
-          withTiming(1.1, { duration: 80 }),
-          withTiming(1, { duration: 80 })
+    const initializeWidget = async () => {
+      try {
+        // First, try to get recent heart rate data
+        const recentData = await HealthKitService.getRecentHeartRate();
+        if (recentData) {
+          setHeartRateData(recentData);
+          setIsLoading(false);
+          console.log(
+            "✅ LiveHeartRateWidget: Found recent heart rate data:",
+            recentData
+          );
+        } else {
+          console.log(
+            "⚠️ LiveHeartRateWidget: No recent heart rate data found"
+          );
+          setIsLoading(false);
+        }
+
+        // Subscribe to live heart rate updates
+        unsubscribe = HealthKitService.subscribeToLiveHeartRate((data) => {
+          console.log(
+            "📱 LiveHeartRateWidget: Received live heart rate update:",
+            data
+          );
+          setHeartRateData(data);
+          setIsLoading(false);
+
+          // Trigger heart beat animation when new data arrives
+          if (data) {
+            heartBeat.value = withSequence(
+              withTiming(1.2, { duration: 100 }),
+              withTiming(1, { duration: 100 }),
+              withTiming(1.1, { duration: 80 }),
+              withTiming(1, { duration: 80 })
+            );
+          }
+        });
+      } catch (error) {
+        console.error(
+          "❌ LiveHeartRateWidget: Error initializing widget:",
+          error
         );
-      }
-    });
-
-    // Also try to get recent data immediately
-    HealthKitService.getRecentHeartRate().then((data) => {
-      if (data && !heartRateData) {
-        setHeartRateData(data);
         setIsLoading(false);
       }
-    });
+    };
 
-    return unsubscribe;
+    initializeWidget();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   const animatedHeartStyle = useAnimatedStyle(() => ({
@@ -136,7 +166,10 @@ export const LiveHeartRateWidget: React.FC<LiveHeartRateWidgetProps> = ({
           ) : (
             <View className="items-center space-y-1">
               <Text className="text-4xl font-bold text-gray-400">--</Text>
-              <Text className="text-sm text-gray-400">No data</Text>
+              <Text className="text-sm text-gray-400">No recent data</Text>
+              <Text className="text-xs text-gray-400 text-center px-2">
+                Check permissions in Settings
+              </Text>
             </View>
           )}
         </View>

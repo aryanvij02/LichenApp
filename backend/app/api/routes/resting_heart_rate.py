@@ -27,7 +27,6 @@ async def get_resting_heart_rate(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-
 @router.get("/test")
 async def test_connection(db: asyncpg.Connection = Depends(get_db)):
     """Test database connection"""

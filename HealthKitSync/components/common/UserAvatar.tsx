@@ -10,11 +10,15 @@ export const UserAvatar: React.FC = () => {
   const handlePress = () => {
     Alert.alert(user?.name || "User", "Choose an option", [
       {
+        text: "Settings",
+        onPress: () => {
+          (navigation as any).navigate("Settings");
+        },
+      },
+      {
         text: "Developer Tools",
         onPress: () => {
-          // TODO: Navigate to developer screen
-          // For now, just log
-          console.log("Navigate to developer tools");
+          (navigation as any).navigate("Developer");
         },
       },
       {

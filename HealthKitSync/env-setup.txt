@@ -1,0 +1,12 @@
+# Environment Setup for HealthKit Sync mobile app
+# Create a .env file in the HealthKitSync directory with these contents:
+
+EXPO_API_GATEWAY_URL=https://wxa3064yx7.execute-api.us-west-2.amazonaws.com/dev
+EXPO_API_BACKEND_URL=http://YOUR_EC2_PUBLIC_IP
+EXPO_SUPABASE_URL=https://ycwmpqihjulwbqgaihue.supabase.co
+EXPO_SUPABASE_KEY=your_supabase_anon_key_here
+
+# Instructions:
+# 1. Replace YOUR_EC2_PUBLIC_IP with your actual EC2 public IP
+# 2. Replace your_supabase_anon_key_here with your actual Supabase anon key
+# 3. Save this as .env in the HealthKitSync directory

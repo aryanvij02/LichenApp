@@ -1,3 +1,5 @@
+//TODO: Check if this is used anywhere
+
 import Constants from 'expo-constants';
 
 export interface HeartRateReading {
@@ -67,6 +69,32 @@ export interface SleepSummary {
   total_stages_count: number;
 }
 
+export interface StressMetrics {
+  current: number;
+  highest: number;
+  lowest: number;
+  average: number;
+  lastUpdated: Date;
+  user_id: string;
+  local_date: string;
+}
+
+export interface UpcomingActivity {
+  id: string;
+  type: string;
+  title: string;
+  time?: string;
+  description?: string;
+  user_id: string;
+}
+
+export interface DailySummary {
+  score: number;
+  date: string;
+  insights: string[];
+  user_id: string;
+}
+
 interface HRVData {
   user_id: string;
   local_date: string;
@@ -89,6 +117,8 @@ interface StressData {
   level: 'low' | 'moderate' | 'high';
 }
 
+
+
 // Type the dummy data properly
 interface DummyData {
   steps: StepsData[];
@@ -100,14 +130,17 @@ interface DummyData {
   hrv: HRVData[];
   body_battery: BodyBatteryData[];
   stress: StressData[];
+  stress_metrics: StressMetrics[];
+  upcoming_activities: UpcomingActivity[];
+  daily_summary: DailySummary[];
 }
 
 // Import and type the dummy data
 const dummyData: DummyData = require('../assets/data/dummy-health-data.json');
 
 export class HealthAPIService {
-  private static readonly API_BACKEND_URL = Constants.expoConfig?.extra?.apiBackendUrl || 'https://your-backend-url.com';
-  private static readonly USE_DUMMY_DATA = true; // Set to false when you want to use real API
+  private static readonly API_BACKEND_URL = Constants.expoConfig?.extra?.apiBackendUrl || 'http://35.92.117.44';
+  private static readonly USE_DUMMY_DATA = false; // Set to false when you want to use real API
 
   // Helper function to simulate API delay
   private static async simulateDelay(ms: number = 300): Promise<void> {
@@ -137,20 +170,41 @@ export class HealthAPIService {
   private static async makeRequest(endpoint: string, params: Record<string, string> = {}) {
     const url = new URL(`${this.API_BACKEND_URL}${endpoint}`);
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
+      if (value) { // Only add non-empty values
+        url.searchParams.append(key, value);
+      }
     });
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    console.log(`🌐 Making API request to: ${url.toString()}`);
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      console.log(`📡 API Response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API request failed: ${response.status} - ${errorText}`);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ API Response data:`, data);
+      return data;
+    } catch (error) {
+      console.error(`❌ API request error:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   // Now all methods should work without TypeScript errors
@@ -189,6 +243,41 @@ export class HealthAPIService {
       end_time: endTime, 
       user_id: userId 
     });
+  }
+
+  // Test HTTP vs HTTPS connectivity
+  static async testNetworkConnectivity(): Promise<void> {
+    console.log(`🔍 Testing network connectivity...`);
+    
+    // Test HTTPS with httpbin.org
+    try {
+      console.log(`🌐 Testing HTTPS with httpbin.org...`);
+      const httpsResponse = await fetch('https://httpbin.org/get');
+      const httpsData = await httpsResponse.json();
+      console.log(`✅ HTTPS test successful:`, httpsData);
+    } catch (httpsError) {
+      console.error(`❌ HTTPS test failed:`, httpsError);
+    }
+
+    // Test HTTP with httpbin.org  
+    try { 
+      console.log(`🌐 Testing HTTP with httpbin.org...`);
+      const httpResponse = await fetch('http://httpbin.org/get');
+      const httpData = await httpResponse.json();
+      console.log(`✅ HTTP test successful:`, httpData);
+    } catch (httpError) {
+      console.error(`❌ HTTP test failed:`, httpError);
+    }
+
+    // Test your backend
+    try {
+      console.log(`🌐 Testing your backend: ${this.API_BACKEND_URL}`);
+      const backendResponse = await fetch(`${this.API_BACKEND_URL}/health`);
+      const backendData = await backendResponse.json();
+      console.log(`✅ Backend test successful:`, backendData);
+    } catch (backendError) {
+      console.error(`❌ Backend test failed:`, backendError);
+    }
   }
 
   static async getRestingHeartRate(startDate: string, endDate: string, userId: string): Promise<RestingHeartRate[]> {
@@ -307,6 +396,80 @@ export class HealthAPIService {
       local_date: localDate,
       stress_level: stress,
       level
+    };
+  }
+
+  static async getStressMetrics(localDate: string, userId: string): Promise<StressMetrics> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUserAndDate(dummyData.stress_metrics, userId, localDate);
+      const result = filtered.length > 0 ? filtered[0] : {
+        user_id: userId,
+        local_date: localDate,
+        current: Math.floor(Math.random() * 100),
+        highest: Math.floor(60 + Math.random() * 40),
+        lowest: Math.floor(Math.random() * 30),
+        average: Math.floor(30 + Math.random() * 40),
+        lastUpdated: new Date()
+      };
+      console.log(`📊 Dummy Stress Metrics for ${localDate}:`, result);
+      return result;
+    }
+    
+    const current = Math.floor(Math.random() * 100);
+    return {
+      user_id: userId,
+      local_date: localDate,
+      current,
+      highest: Math.floor(60 + Math.random() * 40),
+      lowest: Math.floor(Math.random() * 30),
+      average: Math.floor(30 + Math.random() * 40),
+      lastUpdated: new Date()
+    };
+  }
+
+  static async getUpcomingActivities(userId: string): Promise<UpcomingActivity[]> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUser(dummyData.upcoming_activities, userId);
+      console.log(`📅 Dummy Upcoming Activities:`, filtered);
+      return filtered;
+    }
+    
+    return [
+      {
+        id: '1',
+        type: 'medical',
+        title: 'Patient checkup',
+        time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+        description: 'Routine health assessment',
+        user_id: userId
+      }
+    ];
+  }
+
+  static async getDailySummary(localDate: string, userId: string): Promise<DailySummary> {
+    await this.simulateDelay();
+    
+    if (this.USE_DUMMY_DATA) {
+      const filtered = this.filterByUser(dummyData.daily_summary, userId);
+      const result = filtered.find(item => item.date === localDate) || {
+        score: Math.floor(60 + Math.random() * 40),
+        date: localDate,
+        insights: ['Good sleep quality', 'Active day', 'Low stress levels'],
+        user_id: userId
+      };
+      console.log(`📈 Dummy Daily Summary for ${localDate}:`, result);
+      return result;
+    }
+    
+    return {
+      score: Math.floor(60 + Math.random() * 40),
+      date: localDate,
+      insights: ['Good sleep quality', 'Active day', 'Low stress levels'],
+      user_id: userId
     };
   }
 }

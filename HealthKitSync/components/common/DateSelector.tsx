@@ -1,5 +1,5 @@
 import React from "react";
-import { TouchableOpacity, View, Text } from "react-native";
+import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 interface DateSelectorProps {
@@ -46,30 +46,72 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   return (
-    <View className="flex-row items-center justify-between w-40" style={style}>
+    <View style={[styles.container, style]}>
       <TouchableOpacity
         onPress={goToPreviousDay}
-        className="w-10 h-10 rounded-full border border-gray-300 items-center justify-center bg-white shadow-sm"
+        style={styles.navigationButton}
       >
-        <Text className="text-lg font-semibold text-gray-700">‹</Text>
+        <Text style={styles.navigationButtonText}>‹</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity className="flex-row items-center gap-2 px-3 py-2">
-        <Text className="text-lg font-semibold text-gray-900">
-          {formatDate(selectedDate)}
-        </Text>
-        <Ionicons name="chevron-down" size={16} color="#374151" />
+      <TouchableOpacity style={styles.dateButton}>
+        <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         onPress={goToNextDay}
         disabled={isToday}
-        className={`w-10 h-10 rounded-full border border-gray-300 items-center justify-center bg-white shadow-sm ${
-          isToday ? "opacity-30" : "opacity-100"
-        }`}
+        style={[
+          styles.navigationButton,
+          isToday && styles.navigationButtonDisabled,
+        ]}
       >
-        <Text className="text-lg font-semibold text-gray-700">›</Text>
+        <Text style={styles.navigationButtonText}>›</Text>
       </TouchableOpacity>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: 160,
+  },
+  navigationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  navigationButtonDisabled: {
+    opacity: 0.3,
+  },
+  navigationButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+  },
+});

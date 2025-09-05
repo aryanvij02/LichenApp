@@ -1,0 +1,225 @@
+{
+  "timestamp": "2025-09-03_22-33-44",
+  "batch_id": "3e72c969",
+  "user_id": "103919394379618915600",
+  "sample_count": 20,
+  "batch_type": "unknown",
+  "complete_payload": {
+    "samples": [
+      {
+        "unit": "category",
+        "value": "0",
+        "sourceName": "Aryan’s Apple Watch",
+        "uuid": "FF30D228-12B8-402D-A6EB-9E5522454E3F",
+        "type": "HKCategoryTypeIdentifierAppleStandHour",
+        "startDate": "2025-09-03T21:00:00.000Z",
+        "endDate": "2025-09-03T22:00:00.000Z"
+      },
+      {
+        "sourceName": "Aryan’s Apple Watch",
+        "startDate": "2025-09-03T07:02:13.528Z",
+        "type": "HKQuantityTypeIdentifierRestingHeartRate",
+        "value": "58",
+        "uuid": "2BC8F348-338E-42BA-9B4C-C1C162B0AD0A",
+        "endDate": "2025-09-03T20:37:44.061Z",
+        "unit": "count/min"
+      },
+      {
+        "endDate": "2025-09-03T20:13:17.374Z",
+        "sourceName": "Av iPhone",
+        "uuid": "FE2B04C6-70EF-47EA-A002-376FBD0C8044",
+        "unit": "count",
+        "type": "HKQuantityTypeIdentifierFlightsClimbed",
+        "startDate": "2025-09-03T20:13:14.823Z",
+        "value": "1"
+      },
+      {
+        "uuid": "2C7C48CE-6FDB-4C9D-8258-4CD9A3864EBB",
+        "startDate": "2025-09-03T21:50:13.609Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "type": "HKQuantityTypeIdentifierEnvironmentalAudioExposure",
+        "endDate": "2025-09-03T22:20:13.608Z"
+      },
+      {
+        "startDate": "2025-09-03T21:50:00.000Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "type": "HKQuantityTypeIdentifierAppleStandTime",
+        "value": "2",
+        "uuid": "57DF57DA-C521-487D-8D30-F60DB5F41337",
+        "endDate": "2025-09-03T21:55:00.000Z",
+        "unit": "min"
+      },
+      {
+        "startDate": "2025-09-03T22:05:32.974Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "type": "HKQuantityTypeIdentifierDistanceWalkingRunning",
+        "value": "17.36373386212654",
+        "unit": "m",
+        "uuid": "075C7458-ACC4-4A07-A7A3-8F79D4E8C211",
+        "endDate": "2025-09-03T22:05:58.578Z"
+      },
+      {
+        "type": "HKQuantityTypeIdentifierStepCount",
+        "startDate": "2025-09-03T22:05:32.974Z",
+        "endDate": "2025-09-03T22:05:58.578Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "value": "24",
+        "unit": "count",
+        "uuid": "E81B77B5-A7AF-4FE3-9790-3628342F5103"
+      },
+      {
+        "type": "HKQuantityTypeIdentifierAppleExerciseTime",
+        "uuid": "800E5DAF-810D-4944-B643-1D71B84F62E4",
+        "unit": "min",
+        "endDate": "2025-09-03T20:17:00.000Z",
+        "startDate": "2025-09-03T20:16:00.000Z",
+        "value": "1",
+        "sourceName": "Aryan’s Apple Watch"
+      },
+      {
+        "sourceName": "Aryan’s Apple Watch",
+        "value": "83",
+        "uuid": "B958D4CC-C8F1-4E82-B17E-1514CD1773F9",
+        "type": "HKQuantityTypeIdentifierHeartRate",
+        "startDate": "2025-09-03T22:30:20.186Z",
+        "unit": "count/min",
+        "metadata": "{\n    HKMetadataKeyHeartRateMotionContext = 1;\n}",
+        "endDate": "2025-09-03T22:30:20.186Z"
+      },
+      {
+        "startDate": "2025-09-03T22:27:36.684Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "endDate": "2025-09-03T22:27:46.926Z",
+        "value": "0.014",
+        "uuid": "29EDA34A-EC28-40C7-A943-E08C5327AAD5",
+        "unit": "kcal",
+        "type": "HKQuantityTypeIdentifierActiveEnergyBurned"
+      },
+      {
+        "metadata": "{\n    HKAverageMETs = \"6.86748 kcal/hr\\U00b7kg\";\n    HKIndoorWorkout = 0;\n    HKTimeZone = \"America/Los_Angeles\";\n    HKWeatherHumidity = \"8100 %\";\n    HKWeatherTemperature = \"64.8719 degF\";\n}",
+        "duration": "4640.274753093719",
+        "uuid": "862777C4-05DB-4CD1-A5E2-7934941E4C83",
+        "sourceName": "Aryan’s Apple Watch",
+        "endDate": "2025-09-03T03:29:53.815Z",
+        "unit": "workout",
+        "startDate": "2025-09-03T02:12:33.540Z",
+        "type": "HKWorkoutTypeIdentifier",
+        "workoutActivityType": "50"
+      },
+      {
+        "uuid": "C62F465D-D01E-4506-B511-9DA5D23CFCDE",
+        "startDate": "2025-09-03T14:16:45.536Z",
+        "value": "13.5",
+        "type": "HKQuantityTypeIdentifierRespiratoryRate",
+        "sourceName": "Aryan’s Apple Watch",
+        "endDate": "2025-09-03T14:16:45.536Z",
+        "unit": "count/min"
+      },
+      {
+        "value": "20.95499999999999",
+        "sourceName": "Aryan’s Apple Watch",
+        "type": "HKQuantityTypeIdentifierBasalEnergyBurned",
+        "startDate": "2025-09-03T22:16:00.262Z",
+        "uuid": "9C9F9CB5-7BDA-4DA5-A55E-ADE9FA0E9E0F",
+        "endDate": "2025-09-03T22:31:01.511Z",
+        "unit": "kcal"
+      },
+      {
+        "startDate": "2025-09-03T18:27:46.616Z",
+        "endDate": "2025-09-03T18:57:25.617Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "uuid": "7805FBCD-9C06-4358-8A59-6363450AAECD",
+        "type": "HKQuantityTypeIdentifierEnvironmentalSoundReduction"
+      },
+      {
+        "sourceName": "Aryan’s Apple Watch",
+        "uuid": "70087749-DEC2-4A44-8091-E74BA43799D2",
+        "metadata": "{\n    HKMetadataKeyMaximumLightIntensity = \"18000 lx\";\n}",
+        "startDate": "2025-09-03T21:00:03.486Z",
+        "endDate": "2025-09-03T21:05:03.486Z",
+        "type": "HKQuantityTypeIdentifierTimeInDaylight"
+      },
+      {
+        "numberOfVoltageMeasurements": "15360",
+        "type": "HKDataTypeIdentifierElectrocardiogram",
+        "voltageDataUploaded": "1",
+        "voltagePointsCount": "15360",
+        "sourceName": "ECG",
+        "symptomsStatus": "not_set",
+        "voltageS3Key": "ecg_voltage/103919394379618915600/8E8CB0C4-9EE8-4BA6-8E9B-0035DF8C1314_2025-09-03_22-33-42.json",
+        "endDate": "2025-09-03T16:51:26.495Z",
+        "startDate": "2025-09-03T16:50:56.495Z",
+        "samplingFrequency": "512",
+        "ecgClassification": "sinus_rhythm",
+        "averageHeartRate": "72",
+        "unit": "ecg",
+        "uuid": "8E8CB0C4-9EE8-4BA6-8E9B-0035DF8C1314",
+        "metadata": "{\n    classification = \"sinus_rhythm\";\n    hasVoltageData = 1;\n    symptomsStatus = \"not_set\";\n    voltageUploadAttempted = 0;\n}"
+      },
+      {
+        "startDate": "2025-09-03T21:52:14.103Z",
+        "metadata": "{\n    HKActivityType = 3000;\n    HKAlgorithmVersion = 1;\n    HKPhysicalEffortEstimationType = 2;\n}",
+        "sourceName": "Aryan’s Apple Watch",
+        "uuid": "4ADDE392-4F50-4498-86E6-C217302BB58A",
+        "type": "HKQuantityTypeIdentifierPhysicalEffort",
+        "endDate": "2025-09-03T21:52:29.466Z"
+      },
+      {
+        "type": "HKQuantityTypeIdentifierWalkingHeartRateAverage",
+        "uuid": "457F27D1-262F-4E67-9D79-23A108A03E68",
+        "startDate": "2025-09-03T07:02:13.528Z",
+        "endDate": "2025-09-03T20:53:23.187Z",
+        "sourceName": "Aryan’s Apple Watch"
+      },
+      {
+        "type": "HKCategoryTypeIdentifierSleepAnalysis",
+        "metadata": "{\n    HKTimeZone = \"America/Los_Angeles\";\n}",
+        "startDate": "2025-09-03T14:20:40.429Z",
+        "value": "3",
+        "unit": "category",
+        "uuid": "F10CC57E-03A3-4EDF-A892-71BD6317FB91",
+        "endDate": "2025-09-03T14:25:40.429Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "sleep_stage": "HKCategoryValueSleepAnalysisAsleepCore"
+      },
+      {
+        "type": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        "unit": "ms",
+        "endDate": "2025-09-03T18:23:34.441Z",
+        "sourceName": "Aryan’s Apple Watch",
+        "metadata": "{\n    HKAlgorithmVersion = 2;\n}",
+        "startDate": "2025-09-03T18:22:41.833Z",
+        "uuid": "608E8550-BDE7-415A-8837-54EA7C8DD433",
+        "value": "33.75306833456278"
+      }
+    ],
+    "metadata": {
+      "timestamp": "2025-09-03T22:33:44.614Z",
+      "total_samples": 548,
+      "batch_type": "historical"
+    },
+    "user_id": "103919394379618915600"
+  },
+  "lambda_event": {
+    "headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate, br",
+      "accept-language": "en-US,en;q=0.9",
+      "content-type": "application/json",
+      "Host": "wxa3064yx7.execute-api.us-west-2.amazonaws.com",
+      "User-Agent": "HealthKitSync/1 CFNetwork/3826.500.131 Darwin/24.5.0",
+      "X-Amzn-Trace-Id": "Root=1-68b8c248-61560ac700506af274e730be",
+      "X-Forwarded-For": "136.24.200.143",
+      "X-Forwarded-Port": "443",
+      "X-Forwarded-Proto": "https"
+    },
+    "path": "/upload-health-data",
+    "httpMethod": "POST"
+  },
+  "extraction_info": {
+    "original_sample_count": 548,
+    "extracted_sample_count": 20,
+    "unique_types_count": 20,
+    "extraction_purpose": "Structure representation with one sample per type"
+  }
+}

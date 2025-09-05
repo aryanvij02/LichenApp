@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { UserProfileService, GoogleUser } from "../services/UserProfileService";
 import { configureGoogleSignIn } from "../config/auth";
+import { SettingsService } from "../services/SettingsService";
 
 interface AuthContextType {
   user: GoogleUser | null;
@@ -20,12 +21,14 @@ interface AuthContextType {
   refreshAuth: () => Promise<void>;
 }
 
+//Creates the React Context Hook
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
+//Main Component that wraps the entire application
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<GoogleUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -146,6 +149,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log("🚪 AuthProvider: Signing out...");
       await UserProfileService.signOut();
+
+      // Clear HealthKit settings when user signs out
+      await SettingsService.clearSettings();
+      console.log("🗑️ AuthProvider: Cleared HealthKit settings");
+
       setUser(null);
       setIsSignedIn(false);
       console.log("✅ AuthProvider: Signed out successfully");

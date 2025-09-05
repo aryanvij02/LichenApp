@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { TouchableOpacity, View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CircularProgress } from "../common/CircularProgress";
-import {
-  HealthAPIService,
-  SleepSummary,
-} from "../../services/HealthAPIService";
+import { SleepSummary } from "../../services/HealthAPIService";
 import { useAuth } from "../../context/AuthContext";
+import { useSleepSummary } from "../../hooks/useHealthData";
 
 interface SleepWidgetProps {
   selectedDate: Date;
@@ -18,34 +16,31 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
   onPress,
 }) => {
   const { user } = useAuth();
-  const [sleepData, setSleepData] = useState<SleepSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const dateStr = selectedDate.toISOString().split("T")[0];
+  const userId = user ? `google_${user.id}` : "";
 
   const SLEEP_GOAL = 480; // 8 hours in minutes
 
-  useEffect(() => {
-    if (!user) return;
+  // Use TanStack Query hook for data fetching
+  const {
+    data: sleepData,
+    isLoading,
+    error,
+    isFetching,
+  } = useSleepSummary(dateStr, userId, !!user);
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const dateStr = selectedDate.toISOString().split("T")[0];
-        const data = await HealthAPIService.getSleepSummary(
-          dateStr,
-          `google_${user.id}`
-        );
-
-        setSleepData(data);
-      } catch (error) {
-        console.error("Error fetching sleep data:", error);
-        setSleepData(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedDate, user]);
+  // Debug logging
+  React.useEffect(() => {
+    if (user && sleepData) {
+      console.log(
+        `😴 SleepWidget: Received sleep summary for ${dateStr}:`,
+        sleepData
+      );
+    }
+    if (error) {
+      console.error("❌ SleepWidget: Error fetching sleep data:", error);
+    }
+  }, [sleepData, error, user, dateStr]);
 
   const getSleepProgress = () => {
     if (!sleepData) return 0;
@@ -90,6 +85,14 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
             />
             <Text className="text-base font-semibold text-gray-900">Sleep</Text>
           </View>
+          {isFetching && !isLoading && (
+            <Ionicons
+              name="refresh"
+              size={16}
+              color="#8E8E93"
+              style={{ opacity: 0.6 }}
+            />
+          )}
         </View>
 
         <View className="flex-1 justify-center items-center">
@@ -98,17 +101,18 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
               <Text className="text-4xl font-bold text-gray-400">--</Text>
               <Text className="text-sm text-gray-400">Loading...</Text>
             </View>
+          ) : error ? (
+            <View className="items-center space-y-1">
+              <Text className="text-4xl font-bold text-red-400">!</Text>
+              <Text className="text-xs text-red-400 text-center">
+                Error loading{"\n"}sleep data
+              </Text>
+            </View>
           ) : sleepData ? (
-            <CircularProgress
-              progress={sleepData.sleep_efficiency}
-              size={100}
-              strokeWidth={8}
-              color={getSleepColor()}
-              backgroundColor="#E5E5EA"
-            >
+            <View className="items-center">
               <View className="items-center">
                 <Text
-                  className="text-lg font-bold"
+                  className="text-xl font-bold"
                   style={{ color: getSleepColor() }}
                 >
                   {formatSleepDuration(sleepData.total_sleep_duration)}
@@ -116,14 +120,14 @@ export const SleepWidget: React.FC<SleepWidgetProps> = ({
                 <Text className="text-xs text-gray-400">
                   {Math.round(sleepData.sleep_efficiency)}% efficiency
                 </Text>
-                <Text
-                  className="text-xs font-semibold"
-                  style={{ color: getSleepColor() }}
-                >
-                  {getSleepQuality()}
-                </Text>
               </View>
-            </CircularProgress>
+              <Text
+                className="text-xs font-semibold mt-2"
+                style={{ color: getSleepColor() }}
+              >
+                {getSleepQuality()}
+              </Text>
+            </View>
           ) : (
             <View className="items-center space-y-1">
               <Text className="text-4xl font-bold text-gray-400">--</Text>
