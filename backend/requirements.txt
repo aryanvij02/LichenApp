@@ -10,3 +10,7 @@ numpy
 pandas
 scipy
 matplotlib
+requests
+PyYAML
+scikit-learn
+pillow
