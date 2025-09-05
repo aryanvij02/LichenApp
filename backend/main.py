@@ -6,7 +6,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import create_db_pool, close_db_pool
-from app.api.routes import steps, heart_rate, resting_heart_rate, sleep
+from app.api.routes import steps, heart_rate, resting_heart_rate, sleep, neurokit
 
 # Simple logging setup
 logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
@@ -58,6 +58,7 @@ app.include_router(steps.router)
 app.include_router(heart_rate.router)
 app.include_router(resting_heart_rate.router)
 app.include_router(sleep.router)
+app.include_router(neurokit.router)
 
 
 @app.get("/")

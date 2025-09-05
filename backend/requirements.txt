@@ -4,3 +4,9 @@ asyncpg
 pydantic-settings
 python-dotenv
 gunicorn
+#ECG Related Packages (Neurokit)
+neurokit2
+numpy
+pandas
+scipy
+matplotlib
