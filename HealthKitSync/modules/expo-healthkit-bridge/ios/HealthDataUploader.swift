@@ -50,18 +50,15 @@ class HealthDataUploader {
     
 //--------------------------------Public Upload Methods--------------------------------
     /// Upload raw health data immediately (for real-time streaming)
-
-
-    //TODO: Include logic to handle if any ECG data is in here
-    func uploadRawSamples(_ rawSamples: [[String: Any]], batchType: String = "realtime") async {
+    func uploadRawSamples(_ rawSamples: [[String: Any]], batchType: String = "realtime") async -> Bool {
         guard !rawSamples.isEmpty else {
             uploaderLog("📭 HealthDataUploader: No samples to upload")
-            return
+            return false
         }
         
         guard let config = self.config else {
             uploaderLog("❌ HealthDataUploader: No configuration available - cannot upload")
-            return
+            return false
         }
         
         uploaderLog("📤 HealthDataUploader: Uploading \(rawSamples.count) raw samples (type: \(batchType))")
@@ -76,6 +73,8 @@ class HealthDataUploader {
         } else {
             uploaderLog("❌ HealthDataUploader: Failed to upload \(rawSamples.count) raw samples")
         }
+        
+        return success
     }
     
     /// Upload historical data for a specific date range (manual upload)

@@ -35,7 +35,8 @@ export default {
         infoPlist: {
           NSHealthShareUsageDescription: "HealthDataExporter reads your health data to create exportable reports.",
           NSHealthUpdateUsageDescription: "HealthDataExporter does not write any data to HealthKit.",
-          UIBackgroundModes: ["background-fetch"],
+          UIBackgroundModes: ["background-fetch", "background-processing"],
+          BGTaskSchedulerPermittedIdentifiers: ["com.lichenapp.health-data-sync"],
           NSAppTransportSecurity: {
             NSAllowsArbitraryLoads: true
           }

@@ -68,8 +68,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (currentUser) {
           console.log("✅ AuthProvider: User found:", currentUser.name);
           setUser(currentUser);
-          // Refresh profile if needed
-          await UserProfileService.refreshUserProfileIfNeeded();
+          //IMPT
+          // Sync profile on app open to ensure latest data
+          const syncSuccess =
+            await UserProfileService.syncUserProfileOnAppOpen();
+          console.log(
+            syncSuccess
+              ? "✅ AuthProvider: Profile synced on app open"
+              : "⚠️ AuthProvider: Profile sync on app open failed"
+          );
         } else {
           // Google says signed in but no local user data - sign out to reset state
           console.log(

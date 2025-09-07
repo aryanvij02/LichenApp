@@ -1,6 +1,8 @@
 import ExpoModulesCore
 import HealthKit
 import Foundation
+import BackgroundTasks
+import UIKit
 // Custom logging function for easy filtering
 func log(_ message: String) {
     print("🔍 HEALTHKIT_DEBUG: \(message)")
@@ -10,6 +12,9 @@ public class ExpoHealthkitBridgeModule: Module {
   private let healthStore = HKHealthStore()
   private var observerQueries: [HKObserverQuery] = []
   private var anchors: [String: HKQueryAnchor] = [:]
+  // Temporary storage for anchors before upload confirmation
+  //HKQueryAnchor is a bookmark that lets you efficiently fetch only incremental HealthKit updates, avoiding reprocessing all past data.
+  private var tempAnchors: [String: HKQueryAnchor] = [:]
   private let uploader = HealthDataUploader()
   
   public func definition() -> ModuleDefinition {
@@ -74,9 +79,28 @@ AsyncFunction("getLocalData") { (types: [String], limit: Int) -> [[String: Any]]
   return await self.getLocalData(types: types, limit: limit)
 }
 
-AsyncFunction("clearLocalData") { (beforeDate: String?) in
-  await self.clearLocalData(beforeDate: beforeDate)
-}
+    AsyncFunction("clearLocalData") { (beforeDate: String?) in
+      await self.clearLocalData(beforeDate: beforeDate)
+    }
+    
+    // MARK: - Testing and Validation Functions
+    
+    AsyncFunction("getQueueStatus") { () -> [String: Any] in
+      return await self.getQueueStatus()
+    }
+    
+    AsyncFunction("getSyncHealthReport") { () -> String in
+      return SyncAnalytics.shared.generateHealthReport()
+    }
+    
+    AsyncFunction("forceSyncProcessing") { () -> [String: Any] in
+      return await self.forceSyncProcessing()
+    }
+    
+    AsyncFunction("validateSyncIntegrity") { () -> [String: Any] in
+      return await self.validateSyncIntegrity()
+    }
+    
 
 AsyncFunction("queryRecentDataSafe") { (types: [String], hours: Int) -> [String: [[String: Any]]] in
   let endDate = Date()
@@ -94,11 +118,88 @@ Events("onSyncEvent")
 Events("onDataStream")
     OnCreate {
       self.loadAnchors()
+      
+      // Register background tasks for health data sync
+      BackgroundTaskManager.shared.registerBackgroundTasks()
+      
+      // Set up coordination with all sync managers
+      ForegroundSyncManager.shared.setHealthModule(self)
+      BackgroundTaskManager.shared.setHealthModule(self)
+      
+      // Listen for anchor update notifications from background tasks
+      self.setupNotificationListeners()
+      
+      // Set up app lifecycle notifications
+      self.setupAppLifecycleNotifications()
     }
 
     OnDestroy {
       self.stopAllObservers()
+      self.cleanupNotificationListeners()
+      self.cleanupAppLifecycleNotifications()
     }
+  }
+  
+  // MARK: - Notification Handling
+  
+  /// Set up notification listeners for component coordination
+  private func setupNotificationListeners() {
+    NotificationCenter.default.addObserver(
+      forName: NSNotification.Name("UpdateAnchorFromQueue"),
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      guard let userInfo = notification.userInfo,
+            let dataType = userInfo["dataType"] as? String,
+            let anchorData = userInfo["anchorData"] as? Data else {
+        log("❌ Invalid anchor update notification")
+        return
+      }
+      
+      Task {
+        await self?.updateAnchorFromQueueItem(dataType: dataType, anchorData: anchorData)
+      }
+    }
+    
+    log("✅ Notification listeners set up")
+  }
+  
+  /// Clean up notification listeners
+  private func cleanupNotificationListeners() {
+    NotificationCenter.default.removeObserver(self, name: NSNotification.Name("UpdateAnchorFromQueue"), object: nil)
+    log("🧹 Notification listeners cleaned up")
+  }
+  
+  /// Set up app lifecycle notification listeners
+  private func setupAppLifecycleNotifications() {
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.didBecomeActiveNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task {
+        await ForegroundSyncManager.shared.handleAppBecameActive()
+      }
+      BackgroundTaskManager.shared.handleAppDidBecomeActive()
+    }
+    
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.didEnterBackgroundNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      ForegroundSyncManager.shared.handleAppWillEnterBackground()
+      BackgroundTaskManager.shared.handleAppDidEnterBackground()
+    }
+    
+    log("✅ App lifecycle notifications set up")
+  }
+  
+  /// Clean up app lifecycle notification listeners
+  private func cleanupAppLifecycleNotifications() {
+    NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
+    NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
+    log("🧹 App lifecycle notification listeners cleaned up")
   }
 
     private func requestPermissions(types: [String]) async throws -> [String: [String]] {
@@ -491,8 +592,315 @@ extension ExpoHealthkitBridgeModule {
     UserDefaults.standard.set(Date(), forKey: "LastSyncDate")
   }
 
+  // MARK: - Deferred Anchor Management
+  
+  /// Query new data WITHOUT updating anchors immediately
+  /// Anchors are stored temporarily until upload succeeds
+  private func queryNewDataWithoutAnchorUpdate(for type: HKSampleType) async throws -> [[String: Any]] {
+    let currentAnchor = anchors[type.identifier] ?? HKQueryAnchor(fromValue: Int(HKAnchoredObjectQueryNoAnchor))
+    
+    return try await withCheckedThrowingContinuation { continuation in
+      let query = HKAnchoredObjectQuery(
+        type: type,
+        predicate: nil,
+        anchor: currentAnchor,
+        limit: HKObjectQueryNoLimit
+      ) { [weak self] query, samples, deletedObjects, newAnchor, error in
+        
+        if let error = error {
+          continuation.resume(throwing: error)
+          return
+        }
+        
+        // Store new anchor temporarily - don't persist yet
+        if let newAnchor = newAnchor {
+          Task { @MainActor [weak self] in
+            self?.tempAnchors[type.identifier] = newAnchor
+            log("📍 Stored temporary anchor for \(type.identifier)")
+          }
+        }
+        
+        // Process samples without updating persistent anchors
+        Task { [weak self] in
+          var processedSamples: [[String: Any]] = []
+          
+          if let samples = samples {
+            for sample in samples {
+              if let processed = await self?.sampleToDictionaryWithVoltage(sample) {
+                processedSamples.append(processed)
+              }
+            }
+          }
+          
+          log("📥 Queried \(processedSamples.count) samples for \(type.identifier) without updating anchor")
+          continuation.resume(returning: processedSamples)
+        }
+      }
+      
+      healthStore.execute(query)
+    }
+  }
+  
+  /// Update anchor ONLY after successful upload
+  /// This ensures no data is lost if upload fails
+  private func updateAnchorAfterSuccessfulUpload(for type: HKSampleType, samples: [[String: Any]]) async {
+    if let tempAnchor = tempAnchors[type.identifier] {
+      await MainActor.run {
+        self.anchors[type.identifier] = tempAnchor
+        self.saveAnchors()
+        self.tempAnchors.removeValue(forKey: type.identifier)
+        self.setLastSyncDate()
+      }
+      log("✅ Updated persistent anchor for \(type.identifier) after successful upload")
+    } else {
+      log("⚠️ No temporary anchor found for \(type.identifier)")
+    }
+  }
+  
+  /// Update anchor from queued item data (for background processing)
+  public func updateAnchorFromQueueItem(dataType: String, anchorData: Data) async {
+    do {
+      if let anchor = try NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: anchorData) {
+        await MainActor.run {
+          self.anchors[dataType] = anchor
+          self.saveAnchors()
+          self.setLastSyncDate()
+        }
+        log("📍 Updated anchor for \(dataType) from queued data")
+      }
+    } catch {
+      log("❌ Failed to decode anchor data for \(dataType): \(error)")
+    }
+  }
+  
+  /// Get current user ID for queue operations
+  private func getCurrentUserId() -> String {
+    // Get user ID from the already-configured uploader
+    do {
+      let config = try UploadConfig.load()
+      return config.userId
+    } catch {
+      log("⚠️ Could not load user ID from uploader config: \(error)")
+      return "unknown_user"  // Fallback - indicates a configuration problem
+    }
+  }
+  
+  // MARK: - Public API for Component Integration
+  
+  /// Provide access to HealthStore for other components
+  public func getHealthStore() -> HKHealthStore {
+    return healthStore
+  }
+  
+  /// Provide access to default monitored types
+  public func getMonitoredTypes() -> [HKSampleType] {
+    return getDefaultHealthKitTypes()
+  }
+  
+  /// Query recent data for missed data detection (used by ForegroundSyncManager)
+  public func queryRecentDataForComponent(type: HKSampleType, hours: Int = 24) async throws -> [[String: Any]] {
+    let endDate = Date()
+    let startDate = Calendar.current.date(byAdding: .hour, value: -hours, to: endDate) ?? endDate
+    
+    let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+    
+    return try await withCheckedThrowingContinuation { continuation in
+      let query = HKSampleQuery(
+        sampleType: type,
+        predicate: predicate,
+        limit: 100, // Limit for missed data check
+        sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+      ) { _, samples, error in
+        if let error = error {
+          continuation.resume(throwing: error)
+          return
+        }
+        
+        // Process samples with basic processing for missed data check
+        Task { [weak self] in
+          var processedSamples: [[String: Any]] = []
+          
+          if let samples = samples {
+            for sample in samples {
+              if let processed = self?.sampleToDictionarySafely(sample) {
+                processedSamples.append(processed)
+              }
+            }
+          }
+          
+          continuation.resume(returning: processedSamples)
+        }
+      }
+      
+      healthStore.execute(query)
+    }
+  }
+  
+  // MARK: - Immediate Upload with Retries
+  
+  /// Attempt immediate upload with quick retries and timeout
+  /// Returns true if upload succeeds, false if it should be queued for later
+  private func attemptImmediateUpload(samples: [[String: Any]]) async -> Bool {
+    let retryDelays: [TimeInterval] = [0, 1, 3] // 0 sec, 1 sec, 3 sec
+    
+    for (attempt, delay) in retryDelays.enumerated() {
+      if delay > 0 {
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+      }
+      
+      log("🔄 Immediate upload attempt \(attempt + 1)/\(retryDelays.count)")
+      
+      do {
+        // Use existing uploader with timeout for immediate sync
+        let uploadTask = Task {
+          await uploader.uploadRawSamples(samples, batchType: "immediate")
+        }
+        
+        // Timeout for immediate upload (10 seconds max)
+        let result = try await withThrowingTaskGroup(of: Bool.self) { group in
+          group.addTask { await uploadTask.value }
+          group.addTask {
+            try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+            throw TimeoutError.uploadTimeout
+          }
+          return try await group.next()!
+        }
+        
+        if result {
+          log("✅ Immediate upload succeeded on attempt \(attempt + 1)")
+          return true
+        }
+        
+      } catch TimeoutError.uploadTimeout {
+        log("⏰ Upload attempt \(attempt + 1) timed out after 10 seconds")
+      } catch {
+        log("❌ Upload attempt \(attempt + 1) failed: \(error)")
+      }
+    }
+    
+    log("❌ All immediate upload attempts failed")
+    return false
+  }
+  
+  /// Encode anchor data for queue storage
+  private func encodeAnchorData(for type: HKSampleType) -> Data? {
+    guard let tempAnchor = tempAnchors[type.identifier] else { return nil }
+    
+    do {
+      return try NSKeyedArchiver.archivedData(withRootObject: tempAnchor, requiringSecureCoding: true)
+    } catch {
+      log("❌ Failed to encode anchor data for \(type.identifier): \(error)")
+      return nil
+    }
+  }
+  
+  // MARK: - Testing and Validation Implementation
+  
+  /// Get comprehensive queue status for debugging
+  private func getQueueStatus() async -> [String: Any] {
+    let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
+    let healthStatus = SyncAnalytics.shared.getSyncHealthStatus()
+    let bgTaskStatus = BackgroundTaskManager.shared.getSchedulingStatus()
+    let foregroundStatus = ForegroundSyncManager.shared.getSyncStatus()
+    
+    return [
+      "queue": queueStats,
+      "health": [
+        "overallHealth": healthStatus.overallHealth.rawValue,
+        "successRate": healthStatus.successRate,
+        "averageResponseTime": healthStatus.averageResponseTime,
+        "consecutiveFailures": healthStatus.systemStatus.consecutiveFailures
+      ],
+      "backgroundTasks": bgTaskStatus,
+      "foreground": foregroundStatus,
+      "anchors": anchors.keys.sorted(),
+      "tempAnchors": tempAnchors.keys.sorted()
+    ]
+  }
+  
+  /// Force processing of queue for testing
+  private func forceSyncProcessing() async -> [String: Any] {
+    log("🧪 Force processing queue for testing")
+    
+    let startTime = Date()
+    
+    // Process foreground queue
+    let foregroundResult = await ForegroundSyncManager.shared.forceProcessQueue()
+    
+    // Process background queue
+    let backgroundResult = await BackgroundTaskManager.shared.processQueueNow()
+    
+    let duration = Date().timeIntervalSince(startTime)
+    
+    return [
+      "foreground": foregroundResult,
+      "background": backgroundResult,
+      "totalDuration": duration,
+      "timestamp": ISO8601DateFormatter().string(from: Date())
+    ]
+  }
+  
+  /// Validate sync integrity and consistency
+  private func validateSyncIntegrity() async -> [String: Any] {
+    log("🔍 Validating sync integrity")
+    
+    var results: [String: Any] = [:]
+    var issues: [String] = []
+    
+    // Check anchor consistency
+    let anchorCount = anchors.count
+    let tempAnchorCount = tempAnchors.count
+    results["anchorCount"] = anchorCount
+    results["tempAnchorCount"] = tempAnchorCount
+    
+    if tempAnchorCount > 10 {
+      issues.append("High number of temporary anchors (\(tempAnchorCount)) - possible upload failures")
+    }
+    
+    // Check queue health
+    let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
+    let pendingCount = queueStats["pending"] ?? 0
+    let failedCount = queueStats["failed"] ?? 0
+    
+    if pendingCount > 1000 {
+      issues.append("High number of pending items (\(pendingCount))")
+    }
+    
+    if failedCount > 500 {
+      issues.append("High number of failed items (\(failedCount))")
+    }
+    
+    // Check sync health
+    let healthStatus = SyncAnalytics.shared.getSyncHealthStatus()
+    if healthStatus.successRate < 0.8 {
+      issues.append("Low success rate (\(String(format: "%.1f", healthStatus.successRate * 100))%)")
+    }
+    
+    if healthStatus.systemStatus.consecutiveFailures > 10 {
+      issues.append("High consecutive failures (\(healthStatus.systemStatus.consecutiveFailures))")
+    }
+    
+    // Check background task status
+    let bgStatus = BackgroundTaskManager.shared.getDetailedStatus()
+    if let bgEnabled = bgStatus["backgroundTasksEnabled"] as? Bool, !bgEnabled {
+      issues.append("Background tasks not enabled")
+    }
+    
+    results["issues"] = issues
+    results["isHealthy"] = issues.isEmpty
+    results["queueStats"] = queueStats
+    results["healthStatus"] = [
+      "overallHealth": healthStatus.overallHealth.rawValue,
+      "successRate": healthStatus.successRate
+    ]
+    
+    log("🔍 Integrity check found \(issues.count) issues")
+    
+    return results
+  }
+  
   // MARK: - Date Range Queries
-private func queryDataInRange(types: [String], startDateISO: String, endDateISO: String) async throws -> [String: [[String: Any]]] {
+  private func queryDataInRange(types: [String], startDateISO: String, endDateISO: String) async throws -> [String: [[String: Any]]] {
   log("Raw input dates - Start: \(startDateISO), End: \(endDateISO)")
   
   // Create a more robust date formatter
@@ -986,40 +1394,86 @@ private func getLimitedHealthTypes(from types: [String]) -> [String] {
   return types.filter { essentialTypes.contains($0) }
 }
 
-// MARK: - Enhanced Background Updates with Native Upload
+// MARK: - Reliable Background Updates with Queue Fallback
 @MainActor
 private func handleBackgroundUpdate(for type: HKSampleType) async {
   do {
-    let result = try await self.performAnchoredQuery(for: type)
+    // 1. Query new data WITHOUT updating anchor
+    let newSamples = try await queryNewDataWithoutAnchorUpdate(for: type)
     
-    // Get the actual new samples for upload
-    if result.added > 0 {
-      let newSamplesDict = try await getRecentSamples(for: type, count: result.added)
+    guard !newSamples.isEmpty else { return }
+    
+    log("📥 Detected \(newSamples.count) new \(type.identifier) samples")
+    
+    // 2. Attempt immediate upload (3 quick retries)
+    let uploadSuccess = await attemptImmediateUpload(samples: newSamples)
+    
+    if uploadSuccess {
+      // 3a. SUCCESS: Update anchor and we're done
+      await updateAnchorAfterSuccessfulUpload(for: type, samples: newSamples)
+      log("✅ Immediate sync successful for \(newSamples.count) \(type.identifier) samples")
       
-      // Save locally for offline capability
-      await saveDataLocally(samples: newSamplesDict)
+      // Track successful sync event
+      let successEvent = SyncAnalytics.SyncEvent(
+        type: "immediate_success",
+        dataType: type.identifier,
+        sampleCount: newSamples.count,
+        success: true,
+        duration: 0 // TODO: Track actual duration
+      )
+      SyncAnalytics.shared.trackSyncEvent(successEvent)
       
-      // Upload samples directly via Swift
-      await uploader.uploadRawSamples(newSamplesDict, batchType: "realtime")
+      // Send success event
+      self.sendEvent("onSyncEvent", [
+        "phase": "immediate_success",
+        "dataType": type.identifier,
+        "count": newSamples.count
+      ])
+    } else {
+      // 3b. FAILED: Add to persistent queue for retry
+      let userId = getCurrentUserId()
+      let anchorData = encodeAnchorData(for: type)
       
-      if #available(iOS 12.2, *), type.identifier == HKObjectType.electrocardiogramType().identifier {
-        log("✅ Background update: \(result.added) ECG samples with voltage data uploaded")
-      } else {
-        log("✅ Background update: \(result.added) \(type.identifier) samples uploaded")
-      }
+      await PersistentUploadQueue.shared.enqueue(
+        samples: newSamples,
+        dataType: type.identifier,
+        userId: userId,
+        anchorData: anchorData
+      )
+      
+      log("⚠️ Immediate sync failed - \(newSamples.count) \(type.identifier) samples queued for retry")
+      
+      // Track failed sync event
+      let failureEvent = SyncAnalytics.SyncEvent(
+        type: "immediate_failed",
+        dataType: type.identifier,
+        sampleCount: newSamples.count,
+        success: false,
+        duration: 0 // TODO: Track actual duration
+      )
+      SyncAnalytics.shared.trackSyncEvent(failureEvent)
+      
+      // Send failure event
+      self.sendEvent("onSyncEvent", [
+        "phase": "immediate_failed",
+        "dataType": type.identifier,
+        "count": newSamples.count,
+        "queued": true
+      ])
+      
+      // Schedule background processing for queued items
+      BackgroundTaskManager.shared.scheduleFrequentSync()
     }
     
-    // Send sync event for monitoring (keep for debugging)
-    self.sendEvent("onSyncEvent", [
-      "phase": "observer",
-      "message": "Background update for \(type.identifier)",
-      "counts": [
-        "added": result.added,
-        "deleted": result.deleted
-      ]
-    ])
   } catch {
     log("❌ Error in background update for \(type.identifier): \(error)")
+    
+    // Send error event
+    self.sendEvent("onSyncEvent", [
+      "phase": "error",
+      "dataType": type.identifier,
+      "error": error.localizedDescription
+    ])
   }
 }
 
@@ -1440,5 +1894,16 @@ private func authorizationStatusDescription(_ status: HKAuthorizationStatus) -> 
   }
 }
 
+}
 
+// MARK: - Timeout Error
+enum TimeoutError: Error {
+  case uploadTimeout
+  
+  var localizedDescription: String {
+    switch self {
+    case .uploadTimeout:
+      return "Upload operation timed out"
+    }
+  }
 }
