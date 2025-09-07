@@ -8,11 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		25E02A9EBFA2BD50E9609BDD /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3788F531C4218797B6552C70 /* ExpoModulesProvider.swift */; };
+		1B4071CFC68E2A09C5FFAA92 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3AEA26E312C93AAF112184 /* ExpoModulesProvider.swift */; };
+		35FE1020984C4A40FCA247DB /* libPods-HealthKitSync.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 24AD5624E0F6C2726CB50B71 /* libPods-HealthKitSync.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		ABCF8FBA505A3BD2AB567D66 /* libPods-HealthKitSync.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DA285EC1B6033AB086F01608 /* libPods-HealthKitSync.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		ECA1791B72FA827E05DC6195 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9F30B68B96FB196A7637055D /* PrivacyInfo.xcprivacy */; };
+		E1292029AC0F7DE320A45358 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C97FBF8B21A80F56B53687DA /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -20,13 +20,13 @@
 		13B07F961A680F5B00A75B9A /* HealthKitSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthKitSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = HealthKitSync/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = HealthKitSync/Info.plist; sourceTree = "<group>"; };
-		3788F531C4218797B6552C70 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-HealthKitSync/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		9F30B68B96FB196A7637055D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = HealthKitSync/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		211F2356657481364BA28A44 /* Pods-HealthKitSync.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HealthKitSync.debug.xcconfig"; path = "Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync.debug.xcconfig"; sourceTree = "<group>"; };
+		24AD5624E0F6C2726CB50B71 /* libPods-HealthKitSync.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-HealthKitSync.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E61A15A7FC4FA9B65CF1AB2 /* Pods-HealthKitSync.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HealthKitSync.release.xcconfig"; path = "Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync.release.xcconfig"; sourceTree = "<group>"; };
+		3A3AEA26E312C93AAF112184 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-HealthKitSync/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = HealthKitSync/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		BD65165EA09E6D65380E32E9 /* Pods-HealthKitSync.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HealthKitSync.release.xcconfig"; path = "Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync.release.xcconfig"; sourceTree = "<group>"; };
-		C04EB40E242EE14961CC0CE3 /* Pods-HealthKitSync.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HealthKitSync.debug.xcconfig"; path = "Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync.debug.xcconfig"; sourceTree = "<group>"; };
-		DA285EC1B6033AB086F01608 /* libPods-HealthKitSync.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-HealthKitSync.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C97FBF8B21A80F56B53687DA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = HealthKitSync/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = HealthKitSync/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* HealthKitSync-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "HealthKitSync-Bridging-Header.h"; path = "HealthKitSync/HealthKitSync-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ABCF8FBA505A3BD2AB567D66 /* libPods-HealthKitSync.a in Frameworks */,
+				35FE1020984C4A40FCA247DB /* libPods-HealthKitSync.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,24 +53,16 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				9F30B68B96FB196A7637055D /* PrivacyInfo.xcprivacy */,
+				C97FBF8B21A80F56B53687DA /* PrivacyInfo.xcprivacy */,
 			);
 			name = HealthKitSync;
-			sourceTree = "<group>";
-		};
-		14719124A1B52FB614F70215 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				DD717E68A658A2031B614C17 /* HealthKitSync */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				DA285EC1B6033AB086F01608 /* libPods-HealthKitSync.a */,
+				24AD5624E0F6C2726CB50B71 /* libPods-HealthKitSync.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -89,8 +81,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				14719124A1B52FB614F70215 /* ExpoModulesProviders */,
-				B9B385B5E6B4A31450FC1DB0 /* Pods */,
+				C6E458C8DC8646A1CE0D022B /* Pods */,
+				97155C0AB3F5DECACF792C3A /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,13 +97,12 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B9B385B5E6B4A31450FC1DB0 /* Pods */ = {
+		97155C0AB3F5DECACF792C3A /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				C04EB40E242EE14961CC0CE3 /* Pods-HealthKitSync.debug.xcconfig */,
-				BD65165EA09E6D65380E32E9 /* Pods-HealthKitSync.release.xcconfig */,
+				C89CB20181ADA08CD0D298CA /* HealthKitSync */,
 			);
-			path = Pods;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -123,10 +114,20 @@
 			path = HealthKitSync/Supporting;
 			sourceTree = "<group>";
 		};
-		DD717E68A658A2031B614C17 /* HealthKitSync */ = {
+		C6E458C8DC8646A1CE0D022B /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				3788F531C4218797B6552C70 /* ExpoModulesProvider.swift */,
+				211F2356657481364BA28A44 /* Pods-HealthKitSync.debug.xcconfig */,
+				2E61A15A7FC4FA9B65CF1AB2 /* Pods-HealthKitSync.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		C89CB20181ADA08CD0D298CA /* HealthKitSync */ = {
+			isa = PBXGroup;
+			children = (
+				3A3AEA26E312C93AAF112184 /* ExpoModulesProvider.swift */,
 			);
 			name = HealthKitSync;
 			sourceTree = "<group>";
@@ -138,14 +139,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "HealthKitSync" */;
 			buildPhases = (
-				22F8F20692A5AF99EBEEB932 /* [CP] Check Pods Manifest.lock */,
-				2BE1379A9C0F5324C72355E7 /* [Expo] Configure project */,
+				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
+				EBE6B2240D42EAB8E8F8AD35 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				D798AAFD5E1CC0DF20C83D7A /* [CP] Embed Pods Frameworks */,
-				9A0025E4A458EF5857B5DCA9 /* [CP] Copy Pods Resources */,
+				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
+				58C8818D8BE8D90ECC04238E /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -166,7 +167,6 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
-						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				ECA1791B72FA827E05DC6195 /* PrivacyInfo.xcprivacy in Resources */,
+				E1292029AC0F7DE320A45358 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,7 +218,7 @@
 			shellPath = /bin/sh;
 			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# SKIP_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\n";
 		};
-		22F8F20692A5AF99EBEEB932 /* [CP] Check Pods Manifest.lock */ = {
+		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -240,26 +240,25 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2BE1379A9C0F5324C72355E7 /* [Expo] Configure project */ = {
+		58C8818D8BE8D90ECC04238E /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputFileListPaths = (
-			);
 			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
 			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
+			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-HealthKitSync/expo-configure-project.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
 		};
-		9A0025E4A458EF5857B5DCA9 /* [CP] Copy Pods Resources */ = {
+		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -351,23 +350,24 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		D798AAFD5E1CC0DF20C83D7A /* [CP] Embed Pods Frameworks */ = {
+		EBE6B2240D42EAB8E8F8AD35 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			inputFileListPaths = (
 			);
-			name = "[CP] Embed Pods Frameworks";
+			inputPaths = (
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-HealthKitSync/Pods-HealthKitSync-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-HealthKitSync/expo-configure-project.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -377,7 +377,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				25E02A9EBFA2BD50E9609BDD /* ExpoModulesProvider.swift in Sources */,
+				1B4071CFC68E2A09C5FFAA92 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -386,15 +386,12 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C04EB40E242EE14961CC0CE3 /* Pods-HealthKitSync.debug.xcconfig */;
+			baseConfigurationReference = 211F2356657481364BA28A44 /* Pods-HealthKitSync.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = HealthKitSync/HealthKitSync.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = TR8Y8U4ZY2;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -415,29 +412,22 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = Ginkgo.HealthDataExporter;
 				PRODUCT_NAME = HealthKitSync;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "HealthKitSync/HealthKitSync-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BD65165EA09E6D65380E32E9 /* Pods-HealthKitSync.release.xcconfig */;
+			baseConfigurationReference = 2E61A15A7FC4FA9B65CF1AB2 /* Pods-HealthKitSync.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = HealthKitSync/HealthKitSync.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 86J2U82CJN;
 				INFOPLIST_FILE = HealthKitSync/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -453,13 +443,9 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = Ginkgo.HealthDataExporter;
 				PRODUCT_NAME = HealthKitSync;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "HealthKitSync/HealthKitSync-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;

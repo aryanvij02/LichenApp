@@ -31,7 +31,6 @@ public class AppDelegate: ExpoAppDelegate {
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
-  
 
   // Linking API
   public override func application(

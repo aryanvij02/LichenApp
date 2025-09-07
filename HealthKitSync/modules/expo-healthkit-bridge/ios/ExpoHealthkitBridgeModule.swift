@@ -113,11 +113,102 @@ AsyncFunction("queryRecentDataSafe") { (types: [String], hours: Int) -> [String:
   )
 }
 
+
+//-----------------------------------------------DIAGNOSTIC FUNCTIONS-----------------------------------------------
+AsyncFunction("runDiagnostics") { () -> [String: Any] in
+    var diagnostics: [String: Any] = [:]
+    
+    // 1. Check HealthKit authorization
+    let types = self.getDefaultHealthKitTypes()
+    var authStatus: [String: String] = [:]
+    for type in types {
+        let status = self.healthStore.authorizationStatus(for: type)
+        authStatus[type.identifier] = self.authorizationStatusDescription(status)
+    }
+    diagnostics["healthkit_auth"] = authStatus
+    
+    // 2. Check background delivery status
+    diagnostics["observer_queries_active"] = self.observerQueries.count
+    
+    // 3. Check queue status
+    let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
+    diagnostics["queue_stats"] = queueStats
+    
+    // 4. Check anchors
+    diagnostics["anchors_count"] = self.anchors.count
+    diagnostics["temp_anchors_count"] = self.tempAnchors.count
+    
+    // 5. Check background task
+    diagnostics["background_task_status"] = BackgroundTaskManager.shared.getSchedulingStatus()
+    
+    // 6. Test immediate background task scheduling
+    let bgRequest = BGProcessingTaskRequest(identifier: "com.lichenapp.health-data-sync")
+    bgRequest.earliestBeginDate = Date(timeIntervalSinceNow: 60) // 1 minute
+    bgRequest.requiresNetworkConnectivity = true
+    
+    do {
+        try BGTaskScheduler.shared.submit(bgRequest)
+        diagnostics["test_bg_schedule"] = "success - task scheduled for 1 minute"
+        DiagnosticLogger.shared.log("diagnostic_bg_test_scheduled")
+    } catch {
+        diagnostics["test_bg_schedule"] = "failed: \(error.localizedDescription)"
+        DiagnosticLogger.shared.log("diagnostic_bg_test_failed", details: ["error": error.localizedDescription])
+    }
+    
+    // Send diagnostic summary
+    DiagnosticLogger.shared.log("diagnostics_complete", details: diagnostics)
+    
+    return diagnostics
+}
+
+AsyncFunction("testBackgroundSync") { () -> [String: Any] in
+    // Force trigger a background sync NOW
+    DiagnosticLogger.shared.log("test_background_sync_triggered")
+    
+    var results: [String: Any] = [:]
+    
+    // Test each data type
+    let types = self.getDefaultHealthKitTypes()
+    for type in types.prefix(3) { // Test first 3 types only
+        do {
+            let samples = try await self.queryRecentDataForComponent(type: type, hours: 1)
+            results[type.identifier] = [
+                "samples_found": samples.count,
+                "success": true
+            ]
+            
+            if !samples.isEmpty {
+                let uploadSuccess = await self.attemptImmediateUpload(samples: samples)
+                results[type.identifier + "_upload"] = uploadSuccess
+            }
+            
+        } catch {
+            results[type.identifier] = [
+                "error": error.localizedDescription,
+                "success": false
+            ]
+        }
+    }
+    
+    DiagnosticLogger.shared.log("test_background_sync_complete", details: results)
+    
+    return results
+}
+
 // Add new event for data streaming
 Events("onSyncEvent")
 Events("onDataStream")
     OnCreate {
       self.loadAnchors()
+
+      // Configure diagnostic logger (This is logger for our entire application)
+      if let config = try? UploadConfig.load() {
+          DiagnosticLogger.shared.configure(apiUrl: config.apiUrl, userId: config.userId)
+          DiagnosticLogger.shared.log("module_initialized", details: [
+              "anchors_loaded": self.anchors.count,
+              "config_exists": true
+          ])
+      }
       
       // Register background tasks for health data sync
       BackgroundTaskManager.shared.registerBackgroundTasks()
@@ -299,6 +390,13 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
 }
   //Starts the background sync
   private func startBackgroundSync(types: [String]) async throws {
+
+    //Diagnostic logging
+    DiagnosticLogger.shared.log("start_background_sync", details: [
+      "types_count": types.count,
+      "types": types
+    ])
+
     //Converts the types strings to Healthkit types. JS can only send a list of Strings, but we convert them to HKSampleType
     let healthKitTypes = types.compactMap { typeString -> HKSampleType? in
       return self.healthKitTypeFromString(typeString)
@@ -310,6 +408,13 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
     
     for type in healthKitTypes {
       let observerQuery = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] query, completionHandler, error in
+        //Diagnostic Logging immediately when HKObserverQuery is triggered (when data is immediately received from healthkit)
+        DiagnosticLogger.shared.log("observer_triggered", details: [
+                "type": type.identifier,
+                "has_error": error != nil,
+                "error": error?.localizedDescription ?? "none"
+            ], severity: "important")
+        
         if let error = error {
           print("Observer query error: \(error)")
           return
@@ -327,8 +432,15 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
       // Enable background delivery
       do {
         try await healthStore.enableBackgroundDelivery(for: type, frequency: .immediate)
+         DiagnosticLogger.shared.log("background_delivery_enabled", details: [
+                "type": type.identifier
+            ])
       } catch {
         print("Failed to enable background delivery for \(type.identifier): \(error)")
+        DiagnosticLogger.shared.log("background_delivery_failed", details: [
+                "type": type.identifier,
+                "error": error.localizedDescription
+        ], severity: "error")
       }
     }
     
@@ -1397,9 +1509,18 @@ private func getLimitedHealthTypes(from types: [String]) -> [String] {
 // MARK: - Reliable Background Updates with Queue Fallback
 @MainActor
 private func handleBackgroundUpdate(for type: HKSampleType) async {
+  DiagnosticLogger.shared.log("background_update_started", details: [
+        "type": type.identifier,
+        "app_state": UIApplication.shared.applicationState.rawValue
+    ])
   do {
     // 1. Query new data WITHOUT updating anchor
     let newSamples = try await queryNewDataWithoutAnchorUpdate(for: type)
+    // 1. Query new data WITHOUT updating anchor
+    DiagnosticLogger.shared.log("background_update_queried", details: [
+            "type": type.identifier,
+            "samples_found": newSamples.count
+        ])
     
     guard !newSamples.isEmpty else { return }
     
@@ -1467,6 +1588,10 @@ private func handleBackgroundUpdate(for type: HKSampleType) async {
     
   } catch {
     log("❌ Error in background update for \(type.identifier): \(error)")
+    DiagnosticLogger.shared.log("background_update_error", details: [
+            "type": type.identifier,
+            "error": error.localizedDescription
+        ], severity: "error")
     
     // Send error event
     self.sendEvent("onSyncEvent", [

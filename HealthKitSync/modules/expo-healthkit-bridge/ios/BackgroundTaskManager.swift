@@ -46,14 +46,26 @@ class BackgroundTaskManager {
         
         do {
             try BGTaskScheduler.shared.submit(request)
+            DiagnosticLogger.shared.log("bg_task_scheduled", details: [
+            "identifier": taskIdentifier,
+            "earliest_begin": "60 minutes",
+            "requires_network": true
+        ])
             print("📅 Background sync scheduled for ~1 hour from now")
         } catch {
+            DiagnosticLogger.shared.log("bg_task_schedule_failed", details: [
+            "error": error.localizedDescription,
+            "error_code": (error as NSError).code
+        ], severity: "error")
             print("❌ Failed to schedule background sync: \(error)")
         }
     }
     
     /// Handle background task execution
     private func handleHealthDataSync(task: BGProcessingTask) {
+         DiagnosticLogger.shared.log("bg_task_started", details: [
+        "task_identifier": task.identifier
+            ], severity: "important")
         print("🔄 Background health data sync started")
         
         // Schedule next sync before processing
