@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  StyleSheet,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar, Agenda } from "react-native-calendars";
 import * as Localization from "expo-localization";
@@ -191,19 +198,25 @@ export const CalendarScreen: React.FC = () => {
   });
 
   const renderViewToggle = () => (
-    <View className="flex-row bg-white rounded-xl p-1 mb-6 shadow-sm">
+    <View style={styles.viewToggleContainer}>
       {(["month", "day"] as CalendarView[]).map((view) => (
         <TouchableOpacity
           key={view}
           onPress={() => setCurrentView(view)}
-          className={`flex-1 py-3 px-4 rounded-lg ${
-            currentView === view ? "bg-blue-500" : "bg-transparent"
-          }`}
+          style={[
+            styles.viewToggleButton,
+            currentView === view
+              ? styles.viewToggleButtonActive
+              : styles.viewToggleButtonInactive,
+          ]}
         >
           <Text
-            className={`text-center font-semibold capitalize ${
-              currentView === view ? "text-white" : "text-gray-600"
-            }`}
+            style={[
+              styles.viewToggleText,
+              currentView === view
+                ? styles.viewToggleTextActive
+                : styles.viewToggleTextInactive,
+            ]}
           >
             {view}
           </Text>
@@ -213,7 +226,7 @@ export const CalendarScreen: React.FC = () => {
   );
 
   const renderMonthView = () => (
-    <View className="bg-white rounded-xl shadow-sm">
+    <View style={styles.monthViewContainer}>
       <Calendar
         onDayPress={handleDayPress}
         markedDates={
@@ -267,17 +280,17 @@ export const CalendarScreen: React.FC = () => {
     });
 
     return (
-      <View className="bg-white rounded-xl shadow-sm flex-1">
-        <View className="p-4 border-b border-gray-200">
-          <View className="flex-row items-center justify-between">
+      <View style={styles.dayViewContainer}>
+        <View style={styles.dayViewHeader}>
+          <View style={styles.dayViewNavigation}>
             <TouchableOpacity
               onPress={goToPreviousDay}
-              className="p-2 rounded-lg bg-gray-100"
+              style={styles.navButton}
             >
-              <Text className="text-blue-600 font-semibold">←</Text>
+              <Text style={styles.navButtonText}>←</Text>
             </TouchableOpacity>
 
-            <Text className="text-lg font-semibold text-gray-900 text-center flex-1">
+            <Text style={styles.dayViewTitle}>
               {new Date(currentDate + "T00:00:00").toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -286,27 +299,18 @@ export const CalendarScreen: React.FC = () => {
               })}
             </Text>
 
-            <TouchableOpacity
-              onPress={goToNextDay}
-              className="p-2 rounded-lg bg-gray-100"
-            >
-              <Text className="text-blue-600 font-semibold">→</Text>
+            <TouchableOpacity onPress={goToNextDay} style={styles.navButton}>
+              <Text style={styles.navButtonText}>→</Text>
             </TouchableOpacity>
           </View>
         </View>
-        <ScrollView className="flex-1">
-          <View className="relative">
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.timeGrid}>
             {/* Time slots grid */}
             {timeSlots.map((time, index) => (
-              <View
-                key={time}
-                className="flex-row border-b border-gray-100"
-                style={{ height: 60 }}
-              >
-                <View className="w-16 p-3 border-r border-gray-100">
-                  <Text className="text-sm text-gray-500 text-right">
-                    {time}
-                  </Text>
+              <View key={time} style={styles.timeSlot}>
+                <View style={styles.timeLabel}>
+                  <Text style={styles.timeLabelText}>{time}</Text>
                 </View>
               </View>
             ))}
@@ -321,44 +325,29 @@ export const CalendarScreen: React.FC = () => {
                 return (
                   <View
                     key={event.id}
-                    className="absolute bg-blue-100 border-l-4 border-blue-500 rounded-lg shadow-sm"
-                    style={{
-                      left: 16 + 64 + 12, // time column width + padding
-                      right: 12,
-                      top: top,
-                      height: height,
-                      zIndex: 10,
-                      paddingHorizontal: 8,
-                      paddingVertical: 8,
-                    }}
+                    style={[
+                      styles.eventBlock,
+                      {
+                        left: 16 + 64 + 12, // time column width + padding
+                        right: 12,
+                        top: top,
+                        height: height,
+                      },
+                    ]}
                   >
-                    <Text
-                      className="text-sm font-semibold text-blue-900"
-                      numberOfLines={2}
-                      style={{ fontSize: 12 }}
-                    >
+                    <Text style={styles.eventTitle} numberOfLines={2}>
                       {event.summary}
                     </Text>
-                    <Text
-                      className="text-xs text-blue-700"
-                      style={{ fontSize: 10 }}
-                    >
+                    <Text style={styles.eventTime}>
                       {formatEventTime(event)}
                     </Text>
                     {event.location && height > 40 && (
-                      <Text
-                        className="text-xs text-blue-600"
-                        numberOfLines={1}
-                        style={{ fontSize: 10 }}
-                      >
+                      <Text style={styles.eventLocation} numberOfLines={1}>
                         📍 {event.location}
                       </Text>
                     )}
                     {duration > 1 && height > 60 && (
-                      <Text
-                        className="text-xs text-blue-500 mt-1"
-                        style={{ fontSize: 10 }}
-                      >
+                      <Text style={styles.eventDuration}>
                         Duration: {duration.toFixed(1)}h
                       </Text>
                     )}
@@ -367,25 +356,24 @@ export const CalendarScreen: React.FC = () => {
               })}
 
             {/* All-day events at the top */}
-            <View className="absolute top-0 left-0 right-0 z-20">
+            <View style={styles.allDayContainer}>
               {calendarEvents
                 .filter((event) => !event.start.dateTime && event.start.date)
                 .map((event, idx) => (
                   <View
                     key={event.id}
-                    className="mx-3 mb-2 p-2 bg-green-100 rounded-lg"
-                    style={{
-                      marginLeft: 16 + 64 + 12,
-                      marginTop: idx * 35,
-                    }}
+                    style={[
+                      styles.allDayEvent,
+                      {
+                        marginLeft: 16 + 64 + 12,
+                        marginTop: idx * 35,
+                      },
+                    ]}
                   >
-                    <Text
-                      className="text-sm font-semibold text-green-900"
-                      numberOfLines={1}
-                    >
+                    <Text style={styles.allDayEventTitle} numberOfLines={1}>
                       {event.summary}
                     </Text>
-                    <Text className="text-xs text-green-700">All Day</Text>
+                    <Text style={styles.allDayEventLabel}>All Day</Text>
                   </View>
                 ))}
             </View>
@@ -407,17 +395,15 @@ export const CalendarScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
-      <View className="flex-1 p-4">
-        <Text className="text-3xl font-semibold text-gray-900 mb-6 text-center">
-          Calendar
-        </Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.screenTitle}>Calendar</Text>
 
         {renderViewToggle()}
 
         {loading && (
-          <View className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl p-4 shadow-lg">
-            <Text className="text-gray-600">Loading calendar events...</Text>
+          <View style={styles.loadingOverlay}>
+            <Text style={styles.loadingText}>Loading calendar events...</Text>
           </View>
         )}
 
@@ -425,30 +411,26 @@ export const CalendarScreen: React.FC = () => {
 
         {/* Calendar Access Status */}
         {!hasCalendarAccess && (
-          <View className="mt-4 bg-yellow-100 rounded-xl p-4">
-            <Text className="text-yellow-800 font-semibold mb-2">
+          <View style={styles.accessAlert}>
+            <Text style={styles.accessAlertTitle}>
               Calendar Access Required
             </Text>
-            <Text className="text-yellow-700 text-sm mb-3">
+            <Text style={styles.accessAlertText}>
               Sign in with Google to view your calendar events in this app.
             </Text>
             <TouchableOpacity
               onPress={checkCalendarAccess}
-              className="bg-yellow-600 rounded-lg py-2 px-4"
+              style={styles.accessButton}
             >
-              <Text className="text-white font-semibold text-center">
-                Check Access
-              </Text>
+              <Text style={styles.accessButtonText}>Check Access</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {selectedDate && currentView !== "day" && (
-          <View className="mt-6 bg-white rounded-xl p-4 shadow-sm">
-            <Text className="text-lg font-semibold text-gray-900 mb-2">
-              Selected Date
-            </Text>
-            <Text className="text-gray-600">
+          <View style={styles.selectedDateCard}>
+            <Text style={styles.selectedDateTitle}>Selected Date</Text>
+            <Text style={styles.selectedDateText}>
               {new Date(selectedDate + "T00:00:00").toLocaleDateString(
                 "en-US",
                 {
@@ -465,3 +447,276 @@ export const CalendarScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f3f4f6", // bg-gray-100
+  },
+  content: {
+    flex: 1,
+    padding: 16, // p-4
+  },
+  screenTitle: {
+    fontSize: 30, // text-3xl
+    fontWeight: "600", // font-semibold
+    color: "#111827", // text-gray-900
+    marginBottom: 24, // mb-6
+    textAlign: "center",
+  },
+  // View Toggle Styles
+  viewToggleContainer: {
+    flexDirection: "row",
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    padding: 4, // p-1
+    marginBottom: 24, // mb-6
+    // Shadow styles for shadow-sm
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  viewToggleButton: {
+    flex: 1,
+    paddingVertical: 12, // py-3
+    paddingHorizontal: 16, // px-4
+    borderRadius: 8, // rounded-lg
+  },
+  viewToggleButtonActive: {
+    backgroundColor: "#3b82f6", // bg-blue-500
+  },
+  viewToggleButtonInactive: {
+    backgroundColor: "transparent",
+  },
+  viewToggleText: {
+    textAlign: "center",
+    fontWeight: "600", // font-semibold
+    textTransform: "capitalize",
+  },
+  viewToggleTextActive: {
+    color: "white",
+  },
+  viewToggleTextInactive: {
+    color: "#4b5563", // text-gray-600
+  },
+  // Month View Styles
+  monthViewContainer: {
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    // Shadow styles for shadow-sm
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  // Day View Styles
+  dayViewContainer: {
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    flex: 1,
+    // Shadow styles for shadow-sm
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  dayViewHeader: {
+    padding: 16, // p-4
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb", // border-gray-200
+  },
+  dayViewNavigation: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  navButton: {
+    padding: 8, // p-2
+    borderRadius: 8, // rounded-lg
+    backgroundColor: "#f3f4f6", // bg-gray-100
+  },
+  navButtonText: {
+    color: "#2563eb", // text-blue-600
+    fontWeight: "600", // font-semibold
+  },
+  dayViewTitle: {
+    fontSize: 18, // text-lg
+    fontWeight: "600", // font-semibold
+    color: "#111827", // text-gray-900
+    textAlign: "center",
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  timeGrid: {
+    position: "relative",
+  },
+  timeSlot: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6", // border-gray-100
+    height: 60,
+  },
+  timeLabel: {
+    width: 64, // w-16
+    padding: 12, // p-3
+    borderRightWidth: 1,
+    borderRightColor: "#f3f4f6", // border-gray-100
+  },
+  timeLabelText: {
+    fontSize: 14, // text-sm
+    color: "#6b7280", // text-gray-500
+    textAlign: "right",
+  },
+  // Event Styles
+  eventBlock: {
+    position: "absolute",
+    backgroundColor: "#dbeafe", // bg-blue-100
+    borderLeftWidth: 4,
+    borderLeftColor: "#3b82f6", // border-blue-500
+    borderRadius: 8, // rounded-lg
+    zIndex: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    // Shadow styles for shadow-sm
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  eventTitle: {
+    fontSize: 12,
+    fontWeight: "600", // font-semibold
+    color: "#1e3a8a", // text-blue-900
+  },
+  eventTime: {
+    fontSize: 10,
+    color: "#1d4ed8", // text-blue-700
+  },
+  eventLocation: {
+    fontSize: 10,
+    color: "#2563eb", // text-blue-600
+  },
+  eventDuration: {
+    fontSize: 10,
+    color: "#3b82f6", // text-blue-500
+    marginTop: 4,
+  },
+  // All-day Events
+  allDayContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  allDayEvent: {
+    marginHorizontal: 12, // mx-3
+    marginBottom: 8, // mb-2
+    padding: 8, // p-2
+    backgroundColor: "#dcfce7", // bg-green-100
+    borderRadius: 8, // rounded-lg
+  },
+  allDayEventTitle: {
+    fontSize: 14, // text-sm
+    fontWeight: "600", // font-semibold
+    color: "#14532d", // text-green-900
+  },
+  allDayEventLabel: {
+    fontSize: 12, // text-xs
+    color: "#15803d", // text-green-700
+  },
+  // Loading Overlay
+  loadingOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -75 }, { translateY: -25 }],
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    padding: 16, // p-4
+    // Shadow styles for shadow-lg
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 25,
+    elevation: 10,
+  },
+  loadingText: {
+    color: "#4b5563", // text-gray-600
+  },
+  // Access Alert
+  accessAlert: {
+    marginTop: 16, // mt-4
+    backgroundColor: "#fef3c7", // bg-yellow-100
+    borderRadius: 12, // rounded-xl
+    padding: 16, // p-4
+  },
+  accessAlertTitle: {
+    color: "#92400e", // text-yellow-800
+    fontWeight: "600", // font-semibold
+    marginBottom: 8, // mb-2
+  },
+  accessAlertText: {
+    color: "#b45309", // text-yellow-700
+    fontSize: 14, // text-sm
+    marginBottom: 12, // mb-3
+  },
+  accessButton: {
+    backgroundColor: "#d97706", // bg-yellow-600
+    borderRadius: 8, // rounded-lg
+    paddingVertical: 8, // py-2
+    paddingHorizontal: 16, // px-4
+  },
+  accessButtonText: {
+    color: "white",
+    fontWeight: "600", // font-semibold
+    textAlign: "center",
+  },
+  // Selected Date Card
+  selectedDateCard: {
+    marginTop: 24, // mt-6
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    padding: 16, // p-4
+    // Shadow styles for shadow-sm
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  selectedDateTitle: {
+    fontSize: 18, // text-lg
+    fontWeight: "600", // font-semibold
+    color: "#111827", // text-gray-900
+    marginBottom: 8, // mb-2
+  },
+  selectedDateText: {
+    color: "#4b5563", // text-gray-600
+  },
+});

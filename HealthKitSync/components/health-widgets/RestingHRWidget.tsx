@@ -1,5 +1,5 @@
 import React from "react";
-import { TouchableOpacity, View, Text } from "react-native";
+import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { RestingHeartRate } from "../../services/HealthAPIService";
 import { useAuth } from "../../context/AuthContext";
@@ -59,9 +59,9 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
-      <View className="bg-white rounded-xl p-4 h-40 shadow-lg">
-        <View className="flex-row items-center justify-between mb-2">
-          <View className="flex-row items-center space-x-2">
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
             <Ionicons
               name="pulse"
               size={20}
@@ -69,7 +69,7 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
                 rhrData ? getStatusColor(rhrData.resting_heart_rate) : "#8E8E93"
               }
             />
-            <Text className="text-base font-semibold text-gray-900">RHR</Text>
+            <Text style={styles.title}>RHR</Text>
           </View>
           {isFetching && !isLoading && (
             <Ionicons
@@ -81,41 +81,43 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
           )}
         </View>
 
-        <View className="flex-1 justify-center items-center">
+        <View style={styles.content}>
           {isLoading ? (
-            <View className="items-center space-y-1">
-              <Text className="text-4xl font-bold text-gray-400">--</Text>
-              <Text className="text-sm text-gray-400">Loading...</Text>
+            <View style={styles.centered}>
+              <Text style={styles.largeValue}>--</Text>
+              <Text style={styles.label}>Loading...</Text>
             </View>
           ) : error ? (
-            <View className="items-center space-y-1">
-              <Text className="text-4xl font-bold text-red-400">!</Text>
-              <Text className="text-xs text-red-400 text-center">
+            <View style={styles.centered}>
+              <Text style={[styles.largeValue, styles.errorText]}>!</Text>
+              <Text style={[styles.hint, styles.errorText]}>
                 Error loading{"\n"}RHR data
               </Text>
             </View>
           ) : rhrData ? (
-            <View className="items-center space-y-1">
+            <View style={styles.centered}>
               <Text
-                className="text-4xl font-bold"
-                style={{ color: getStatusColor(rhrData.resting_heart_rate) }}
+                style={[
+                  styles.largeValue,
+                  { color: getStatusColor(rhrData.resting_heart_rate) },
+                ]}
               >
                 {rhrData.resting_heart_rate}
               </Text>
-              <Text className="text-sm text-gray-400">bpm</Text>
+              <Text style={styles.label}>bpm</Text>
               <Text
-                className="text-xs font-semibold"
-                style={{ color: getStatusColor(rhrData.resting_heart_rate) }}
+                style={[
+                  styles.status,
+                  { color: getStatusColor(rhrData.resting_heart_rate) },
+                ]}
               >
                 {getStatusText(rhrData.resting_heart_rate)}
               </Text>
             </View>
           ) : (
-            <View className="items-center space-y-1">
-              <Text className="text-4xl font-bold text-gray-400">--</Text>
-              <Text className="text-xs text-gray-400 text-center">
-                No RHR data{"\n"}for this date
-              </Text>
+            <View style={styles.centered}>
+              <Text style={styles.largeValue}>--</Text>
+              <Text style={styles.hint}>No RHR data{"\n"}for this date</Text>
             </View>
           )}
         </View>
@@ -123,3 +125,67 @@ export const RestingHRWidget: React.FC<RestingHRWidgetProps> = ({
     </TouchableOpacity>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "white",
+    borderRadius: 12, // rounded-xl
+    padding: 16, // p-4
+    height: 160, // h-40
+    // Shadow styles for shadow-lg
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 25,
+    elevation: 10,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8, // mb-2
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8, // space-x-2
+  },
+  title: {
+    fontSize: 16, // text-base
+    fontWeight: "600", // font-semibold
+    color: "#111827", // text-gray-900
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  centered: {
+    alignItems: "center",
+    gap: 4, // space-y-1
+  },
+  largeValue: {
+    fontSize: 36, // text-4xl
+    fontWeight: "bold",
+    color: "#9ca3af", // text-gray-400
+  },
+  label: {
+    fontSize: 14, // text-sm
+    color: "#9ca3af", // text-gray-400
+  },
+  status: {
+    fontSize: 12, // text-xs
+    fontWeight: "600", // font-semibold
+  },
+  hint: {
+    fontSize: 12, // text-xs
+    color: "#9ca3af", // text-gray-400
+    textAlign: "center",
+  },
+  errorText: {
+    color: "#f87171", // text-red-400
+  },
+});

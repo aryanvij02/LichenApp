@@ -1,5 +1,12 @@
 import React from "react";
-import { TouchableOpacity, Alert, View, Text, Image } from "react-native";
+import {
+  TouchableOpacity,
+  Alert,
+  View,
+  Text,
+  Image,
+  StyleSheet,
+} from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 
@@ -44,14 +51,11 @@ export const UserAvatar: React.FC = () => {
 
   return (
     <TouchableOpacity onPress={handlePress}>
-      <View className="w-10 h-10 rounded-full bg-blue-500 items-center justify-center">
+      <View style={styles.container}>
         {user?.photo ? (
-          <Image
-            source={{ uri: user.photo }}
-            className="w-10 h-10 rounded-full"
-          />
+          <Image source={{ uri: user.photo }} style={styles.avatar} />
         ) : (
-          <Text className="text-white text-base font-semibold">
+          <Text style={styles.initials}>
             {user?.name ? getInitials(user.name) : "U"}
           </Text>
         )}
@@ -59,3 +63,24 @@ export const UserAvatar: React.FC = () => {
     </TouchableOpacity>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    width: 40, // w-10
+    height: 40, // h-10
+    borderRadius: 20, // rounded-full
+    backgroundColor: "#3b82f6", // bg-blue-500
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatar: {
+    width: 40, // w-10
+    height: 40, // h-10
+    borderRadius: 20, // rounded-full
+  },
+  initials: {
+    color: "white",
+    fontSize: 16, // text-base
+    fontWeight: "600", // font-semibold
+  },
+});
