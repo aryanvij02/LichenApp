@@ -3,7 +3,7 @@ import SQLite3
 
 /// Persistent queue for health data samples that failed immediate upload
 /// Provides SQLite-backed storage with retry logic and status management
-class PersistentUploadQueue {
+class PersistentUploadQueue: @unchecked Sendable {
     static let shared = PersistentUploadQueue()
     
     private let dbURL: URL

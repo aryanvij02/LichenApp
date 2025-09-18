@@ -109,13 +109,21 @@ class ForegroundSyncManager {
         
         // Notify about results
         await notifyHealthModuleOfResults(successful: totalSuccessful, total: totalProcessed)
+        
+        // If there are still pending items, schedule background tasks
+        let remainingItems = PersistentUploadQueue.shared.getPendingItems(limit: 1)
+        if !remainingItems.isEmpty {
+            BackgroundTaskManager.shared.scheduleAppRefreshTask()
+            BackgroundTaskManager.shared.scheduleProcessingTask()
+            print("📅 Scheduled background tasks for \(remainingItems.count)+ remaining items")
+        }
     }
     
     /// Check for data missed while app was closed
     private func recheckForMissedData() async {
         print("🔍 Checking for missed data while app was closed")
         
-        guard let healthModule = self.healthModule else {
+        guard self.healthModule != nil else {
             print("⚠️ No health module available for missed data check")
             return
         }

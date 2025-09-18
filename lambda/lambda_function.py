@@ -171,6 +171,34 @@ class SupabaseClient:
         else:
             logger.error(f"Failed to update user profile: {response.status_code} {response.text}")
             raise Exception(f"Failed to update user profile: {response.status_code}")
+    
+    def update_user_last_synced(self, user_id: str):
+        """Update user's last_synced_at timestamp after successful health data upload"""
+        try:
+            endpoint = f"{self.url}/rest/v1/user_profiles"
+            current_time = datetime.utcnow().isoformat() + 'Z'
+            
+            update_data = {
+                'last_synced_at': current_time
+            }
+            
+            response = requests.patch(
+                endpoint,
+                json=update_data,
+                headers=self.headers,
+                params={'user_id': f'eq.{user_id}'}
+            )
+            
+            if response.status_code in [200, 204]:
+                logger.info(f"Successfully updated last_synced_at for user {user_id}")
+                return True
+            else:
+                logger.warning(f"Failed to update last_synced_at for user {user_id}: {response.status_code} {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error updating last_synced_at for user {user_id}: {e}")
+            return False
 
 
 class HealthDataProcessor:
@@ -903,6 +931,7 @@ def handle_user_profile(event, s3, bucket_name):
                     'provider_user_id': user_profile['userId'],
                     'last_app_version': user_profile['lastAppVersion'],
                     'last_platform': user_profile['lastPlatform']
+                    # last_synced_at will remain NULL until first health data upload
                 }
                 
                 # Remove None values
@@ -1175,6 +1204,13 @@ def handle_health_data_upload(event, context):
                 # Pass S3 client and bucket name for ECG analysis
                 supabase_result = process_health_data_to_supabase(samples, user_id, supabase)
                 logger.info(f"Successfully processed {supabase_result['total_samples']} samples to Supabase")
+                
+                # Update user's last_synced_at timestamp after successful data processing
+                sync_updated = supabase.update_user_last_synced(user_id)
+                if sync_updated:
+                    logger.info(f"Updated last_synced_at for user {user_id}")
+                else:
+                    logger.warning(f"Failed to update last_synced_at for user {user_id}")
                 
                 send_notification(
                     user_id=user_id,

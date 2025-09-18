@@ -1,277 +1,322 @@
 import Foundation
 import BackgroundTasks
-import HealthKit
+import UIKit
 
-/// Manages background task scheduling and execution for health data sync
-/// Uses BGTaskScheduler for system-optimal background processing
+/// Manages iOS background tasks for health data sync
+/// Uses two-phase approach: Early registration + Later activation to satisfy Apple's timing requirements
+/// Handles both BGAppRefreshTask (frequent, short) and BGProcessingTask (occasional, longer)
 class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
     
-    private let taskIdentifier = "com.lichenapp.health-data-sync"
-    private let operationQueue = OperationQueue()
-    private weak var healthModule: ExpoHealthkitBridgeModule? // Weak reference to prevent retain cycles
+    // Background task identifiers (must match Info.plist)
+    private let appRefreshTaskId = "com.lichenapp.healthsync.refresh"
+    private let processingTaskId = "com.lichenapp.healthsync.process"
+    
+    private weak var healthModule: ExpoHealthkitBridgeModule?
+    private let uploader = HealthDataUploader()
+    
+    // MARK: - Two-Phase State Management
+    
+    /// Tracks whether background tasks are activated and should do real work
+    /// - false: Tasks are registered but do nothing (just complete immediately)
+    /// - true: Tasks perform actual background sync work
+    private var isActivated: Bool = false
     
     // MARK: - Initialization
     
-    private init() {
-        operationQueue.maxConcurrentOperationCount = 1
-        operationQueue.qualityOfService = .utility
-    }
-    
-    // MARK: - Public Interface
+    private init() {}
     
     /// Set reference to health module for coordination
     func setHealthModule(_ module: ExpoHealthkitBridgeModule) {
         self.healthModule = module
     }
     
-    /// Register background tasks with the system
-    func registerBackgroundTasks() {
-        BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: taskIdentifier,
-            using: nil
-        ) { [weak self] task in
-            self?.handleHealthDataSync(task: task as! BGProcessingTask)
-        }
+    // MARK: - Background Task Registration
+    // 
+    // NOTE: Background task registration now happens in BackgroundTaskAppDelegateSubscriber.swift
+    // during iOS app launch (AppDelegate timing). This class only handles activation/deactivation.
+    //
+    // The AppDelegate subscriber registers handlers that delegate back to this class's
+    // handleConditionalAppRefreshTask() and handleConditionalProcessingTask() methods.
+    
+    // MARK: - Phase 2: Later Background Task Activation (Heavyweight)
+    
+    /// Activate background tasks to perform real work
+    /// This is called later when user enables background sync
+    /// Heavy initialization happens here, not during registration
+    func activateBackgroundTasks() {
+        print("🚀 BG_TASK_MANAGER: Activating background tasks (Phase 2)...")
         
-        print("✅ Background tasks registered for health data sync")
+        // Set activation flag - handlers will now do real work
+        isActivated = true
+        
+        print("✅ BG_TASK_MANAGER: Background tasks ACTIVATED - ready for real work")
     }
     
-    /// Schedule frequent background sync (every hour when possible)
-    public func scheduleFrequentSync() {
-        let request = BGProcessingTaskRequest(identifier: taskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour
-        request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = false
+    /// Deactivate background tasks (when user disables sync)
+    func deactivateBackgroundTasks() {
+        print("🛑 BG_TASK_MANAGER: Deactivating background tasks...")
+        
+        // Clear activation flag - handlers will just complete immediately
+        isActivated = false
+        
+        print("✅ BG_TASK_MANAGER: Background tasks DEACTIVATED - will complete immediately")
+    }
+    
+    // MARK: - Task Scheduling
+    
+    /// Schedule next background refresh (called after HealthKit updates)
+    func scheduleAppRefreshTask() {
+        let request = BGAppRefreshTaskRequest(identifier: appRefreshTaskId)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes minimum
         
         do {
             try BGTaskScheduler.shared.submit(request)
-            print("📅 Background sync scheduled for ~1 hour from now")
+            print("🔄 BG_TASK_MANAGER: 📅 Scheduled app refresh task for +15 minutes")
         } catch {
-            print("❌ Failed to schedule background sync: \(error)")
+            print("🔄 BG_TASK_MANAGER: " + "❌ Failed to schedule app refresh task: \(error)")
         }
     }
     
-    /// Handle background task execution
-    private func handleHealthDataSync(task: BGProcessingTask) {
-        print("🔄 Background health data sync started")
+    /// Schedule processing task for larger queue processing
+    func scheduleProcessingTask() {
+        let request = BGProcessingTaskRequest(identifier: processingTaskId)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour minimum
+        request.requiresExternalPower = false // Allow on battery
+        request.requiresNetworkConnectivity = true
         
-        // Schedule next sync before processing
-        scheduleFrequentSync()
-        
-        // Create operation to process queued items
-        let syncOperation = QueuedSyncOperation()
-        syncOperation.completionBlock = {
-            print("🏁 Background sync operation completed")
-            task.setTaskCompleted(success: !syncOperation.isCancelled)
-        }
-        
-        // Handle task expiration
-        task.expirationHandler = {
-            print("⏰ Background sync task expired - cancelling operation")
-            syncOperation.cancel()
-        }
-        
-        // Execute the sync operation
-        operationQueue.addOperation(syncOperation)
-    }
-    
-    // MARK: - App Lifecycle Integration
-    
-    /// Handle app becoming active
-    func handleAppDidBecomeActive() {
-        print("📱 App became active - background task manager notified")
-        // Cancel any background scheduling since foreground sync will handle it
-        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
-    }
-    
-    /// Handle app entering background
-    func handleAppDidEnterBackground() {
-        print("📱 App entered background - checking if sync needed")
-        
-        // Only schedule background task if there are pending items
-        let stats = PersistentUploadQueue.shared.getQueueStatistics()
-        let pendingCount = stats["pending"] ?? 0
-        let failedCount = stats["failed"] ?? 0
-        
-        if pendingCount > 0 || failedCount > 0 {
-            scheduleFrequentSync()
-            print("📱 Background sync scheduled due to \(pendingCount) pending + \(failedCount) failed items")
-        } else {
-            print("📱 No pending items - background sync not needed")
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            print("🔄 BG_TASK_MANAGER: " + "📅 Scheduled processing task for +1 hour")
+        } catch {
+            print("🔄 BG_TASK_MANAGER: " + "❌ Failed to schedule processing task: \(error)")
         }
     }
     
-    // MARK: - Testing and Status
+    // MARK: - Conditional Background Task Handlers
     
-    /// Process queue immediately (for testing/debugging)
-    public func processQueueNow() async -> [String: Any] {
-        print("🧪 Force processing queue for testing")
+    /// Handle app refresh task conditionally based on activation state
+    /// This handler is registered by AppDelegate subscriber but only does real work when activated
+    /// PUBLIC: Called by BackgroundTaskAppDelegateSubscriber during BGTaskScheduler execution
+    public func handleConditionalAppRefreshTask(_ task: BGAppRefreshTask) {
+        print("🔄 BG_TASK_MANAGER: BGAppRefreshTask triggered - checking activation state...")
         
-        let startTime = Date()
-        let operation = QueuedSyncOperation()
-        
-        return await withCheckedContinuation { continuation in
-            operation.completionBlock = {
-                let duration = Date().timeIntervalSince(startTime)
-                let result = [
-                    "success": !operation.isCancelled,
-                    "duration": duration,
-                    "timestamp": ISO8601DateFormatter().string(from: Date()),
-                    "itemsProcessed": operation.getProcessedCount()
-                ] as [String: Any]
-                
-                continuation.resume(returning: result)
-            }
-            
-            operationQueue.addOperation(operation)
-        }
-    }
-    
-    /// Get scheduling status for debugging
-    public func getSchedulingStatus() -> [String: Any] {
-        return [
-            "taskIdentifier": taskIdentifier,
-            "operationQueueCount": operationQueue.operationCount,
-            "backgroundTasksEnabled": true, // BGTaskScheduler is available
-            "queueStats": PersistentUploadQueue.shared.getQueueStatistics()
-        ]
-    }
-    
-    /// Get detailed status information
-    public func getDetailedStatus() -> [String: Any] {
-        let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
-        
-        return [
-            "backgroundTasksEnabled": true,
-            "taskIdentifier": taskIdentifier,
-            "operationQueue": [
-                "operationCount": operationQueue.operationCount,
-                "isSuspended": operationQueue.isSuspended,
-                "qualityOfService": operationQueue.qualityOfService.rawValue
-            ],
-            "queueStatistics": queueStats,
-            "lastUpdate": ISO8601DateFormatter().string(from: Date())
-        ]
-    }
-}
-
-// MARK: - Background Sync Operation
-
-/// Operation that processes queued upload items in background
-class QueuedSyncOperation: Operation, @unchecked Sendable {
-    private var processedCount = 0
-    private let uploader = HealthDataUploader()
-    
-    override func main() {
-        guard !isCancelled else { return }
-        
-        print("🔄 Starting queued sync operation")
-        
-        // Run async processing in sync context
-        let semaphore = DispatchSemaphore(value: 0)
-        
-        Task {
-            await self.processQueuedItems()
-            semaphore.signal()
-        }
-        
-        semaphore.wait()
-        
-        print("✅ Queued sync operation finished - processed \(processedCount) items")
-    }
-    
-    /// Main processing logic
-    private func processQueuedItems() async {
-        let pendingItems = PersistentUploadQueue.shared.getPendingItems(limit: 100)
-        
-        guard !pendingItems.isEmpty else {
-            print("📭 No pending items to process in background")
+        // Check if background tasks are activated
+        guard isActivated else {
+            print("🔄 BG_TASK_MANAGER: BGAppRefreshTask INACTIVE - completing immediately")
+            task.setTaskCompleted(success: true)
             return
         }
         
-        print("📦 Processing \(pendingItems.count) queued items in background")
+        // Tasks are activated - do real work
+        print("🔄 BG_TASK_MANAGER: BGAppRefreshTask ACTIVE - performing real work")
+        handleActiveAppRefreshTask(task)
+    }
+    
+    /// Handle processing task conditionally based on activation state  
+    /// This handler is registered by AppDelegate subscriber but only does real work when activated
+    /// PUBLIC: Called by BackgroundTaskAppDelegateSubscriber during BGTaskScheduler execution
+    public func handleConditionalProcessingTask(_ task: BGProcessingTask) {
+        print("🔄 BG_TASK_MANAGER: BGProcessingTask triggered - checking activation state...")
         
-        // Group items by data type for efficient batch processing
-        let groupedItems = Dictionary(grouping: pendingItems, by: { $0.dataType })
+        // Check if background tasks are activated
+        guard isActivated else {
+            print("🔄 BG_TASK_MANAGER: BGProcessingTask INACTIVE - completing immediately")
+            task.setTaskCompleted(success: true)
+            return
+        }
         
-        for (dataType, items) in groupedItems {
-            guard !isCancelled else { break }
+        // Tasks are activated - do real work
+        print("🔄 BG_TASK_MANAGER: BGProcessingTask ACTIVE - performing real work")
+        handleActiveProcessingTask(task)
+    }
+    
+    // MARK: - Active Background Task Handlers (Real Work)
+    
+    /// Handle active app refresh task (30 seconds typical) - REAL WORK
+    private func handleActiveAppRefreshTask(_ task: BGAppRefreshTask) {
+        print("🔄 BG_TASK_MANAGER: 🚀 Active BGAppRefreshTask started")
+        
+        // Schedule next refresh
+        scheduleAppRefreshTask()
+        
+        let startTime = Date()
+        
+        // Set expiration handler
+        task.expirationHandler = {
+            print("🔄 BG_TASK_MANAGER: ⏰ Active BGAppRefreshTask expired")
+            task.setTaskCompleted(success: false)
+        }
+        
+        // Process small batch from queue
+        Task {
+            let success = await processSmallBatch()
+            let duration = Date().timeIntervalSince(startTime)
             
-            print("🔄 Processing \(items.count) \(dataType) items")
-            let success = await processQueuedItems(items: items, dataType: dataType)
+            print("🔄 BG_TASK_MANAGER: 🏁 Active BGAppRefreshTask completed in \(String(format: "%.2f", duration))s - Success: \(success)")
+            task.setTaskCompleted(success: success)
+        }
+    }
+    
+    /// Handle active processing task (up to 1 minute+) - REAL WORK
+    private func handleActiveProcessingTask(_ task: BGProcessingTask) {
+        print("🔄 BG_TASK_MANAGER: 🚀 Active BGProcessingTask started")
+        
+        // Schedule next processing task
+        scheduleProcessingTask()
+        
+        let startTime = Date()
+        
+        // Set expiration handler
+        task.expirationHandler = {
+            print("🔄 BG_TASK_MANAGER: ⏰ Active BGProcessingTask expired")
+            task.setTaskCompleted(success: false)
+        }
+        
+        // Process larger batch from queue
+        Task {
+            let success = await processLargeBatch()
+            let duration = Date().timeIntervalSince(startTime)
             
-            if success {
-                print("✅ Background upload successful for \(dataType)")
-                processedCount += items.count
-            } else {
-                print("❌ Background upload failed for \(dataType)")
+            print("🔄 BG_TASK_MANAGER: 🏁 Active BGProcessingTask completed in \(String(format: "%.2f", duration))s - Success: \(success)")
+            task.setTaskCompleted(success: success)
+        }
+    }
+    
+    // MARK: - Queue Processing Logic
+    
+    /// Process small batch (for BGAppRefreshTask)
+    private func processSmallBatch() async -> Bool {
+        let pendingItems = PersistentUploadQueue.shared.getPendingItems(limit: 20) // Small batch
+        
+        guard !pendingItems.isEmpty else {
+            print("🔄 BG_TASK_MANAGER: " + "✅ No pending items for small batch")
+            return true
+        }
+        
+        print("🔄 BG_TASK_MANAGER: " + "📦 Processing \(pendingItems.count) items in small batch")
+        
+        var successCount = 0
+        
+        for item in pendingItems {
+            do {
+                // Decode samples
+                guard let samples = try JSONSerialization.jsonObject(with: item.sampleData) as? [[String: Any]] else {
+                    await PersistentUploadQueue.shared.markAsFailed(item.id)
+                    continue
+                }
+                
+                // Try upload with short timeout
+                let success = await attemptBackgroundUpload(samples: samples, timeoutSeconds: 10)
+                
+                if success {
+                    await PersistentUploadQueue.shared.markAsUploaded(item.id)
+                    
+                    // Update anchor if available
+                    if let anchorData = item.anchorData {
+                        await updateAnchorFromQueueItem(dataType: item.dataType, anchorData: anchorData)
+                    }
+                    
+                    successCount += 1
+                    print("🔄 BG_TASK_MANAGER: " + "✅ Uploaded \(samples.count) \(item.dataType) samples")
+                } else {
+                    await PersistentUploadQueue.shared.markAsFailed(item.id)
+                    print("🔄 BG_TASK_MANAGER: " + "❌ Failed to upload \(item.dataType) samples")
+                }
+                
+            } catch {
+                await PersistentUploadQueue.shared.markAsFailed(item.id)
+                print("🔄 BG_TASK_MANAGER: " + "❌ Error processing queue item: \(error)")
             }
         }
         
-        // Clean up old uploaded items
-        let cleanupDate = Date().addingTimeInterval(-7 * 24 * 3600) // 7 days ago
-        await PersistentUploadQueue.shared.cleanupOldItems(olderThan: cleanupDate)
+        print("🔄 BG_TASK_MANAGER: " + "🎯 Small batch: \(successCount)/\(pendingItems.count) successful")
+        return successCount > 0
     }
     
-    /// Process specific items for a data type
-    private func processQueuedItems(items: [PersistentUploadQueue.QueueItem], dataType: String) async -> Bool {
-        do {
-            // Convert queue items back to sample format
-            var samples: [[String: Any]] = []
+    /// Process larger batch (for BGProcessingTask)  
+    private func processLargeBatch() async -> Bool {
+        let pendingItems = PersistentUploadQueue.shared.getPendingItems(limit: 100) // Larger batch
+        
+        guard !pendingItems.isEmpty else {
+            print("🔄 BG_TASK_MANAGER: " + "✅ No pending items for large batch")
+            return true
+        }
+        
+        print("🔄 BG_TASK_MANAGER: " + "📦 Processing \(pendingItems.count) items in large batch")
+        
+        // Group items by data type for efficient batch uploads
+        let groupedItems = Dictionary(grouping: pendingItems, by: { $0.dataType })
+        
+        var totalSuccessful = 0
+        var totalProcessed = 0
+        
+        for (dataType, items) in groupedItems {
+            print("🔄 BG_TASK_MANAGER: " + "🔄 Processing \(items.count) \(dataType) items as batch")
+            
+            // Combine all samples for this data type
+            var allSamples: [[String: Any]] = []
             
             for item in items {
-                if let sampleArray = try JSONSerialization.jsonObject(with: item.sampleData) as? [[String: Any]] {
-                    samples.append(contentsOf: sampleArray)
+                do {
+                    if let samples = try JSONSerialization.jsonObject(with: item.sampleData) as? [[String: Any]] {
+                        allSamples.append(contentsOf: samples)
+                    }
+                } catch {
+                    print("🔄 BG_TASK_MANAGER: " + "❌ Failed to decode sample data: \(error)")
                 }
             }
             
-            guard !samples.isEmpty else {
-                print("⚠️ No valid samples decoded from queue items")
-                return false
+            guard !allSamples.isEmpty else {
+                print("🔄 BG_TASK_MANAGER: " + "⚠️ No valid samples for \(dataType)")
+                continue
             }
             
-            // Attempt upload with longer timeout for background
-            let success = await performBackgroundUpload(samples: samples, dataType: dataType)
+            // Attempt batch upload with longer timeout
+            let success = await attemptBackgroundUpload(samples: allSamples, timeoutSeconds: 30)
             
             if success {
-                // Mark all items as uploaded and update anchors
+                // Mark all items as uploaded
                 for item in items {
                     await PersistentUploadQueue.shared.markAsUploaded(item.id)
                     
-                    // Update anchor if we have anchor data
+                    // Update anchor if available (use the latest one)
                     if let anchorData = item.anchorData {
-                        await updateAnchorFromQueueItem(dataType: dataType, anchorData: anchorData)
+                        await updateAnchorFromQueueItem(dataType: item.dataType, anchorData: anchorData)
                     }
                 }
-                return true
+                
+                totalSuccessful += items.count
+                print("🔄 BG_TASK_MANAGER: " + "✅ Batch uploaded \(allSamples.count) \(dataType) samples")
             } else {
-                // Mark items as failed (increments retry count)
+                // Mark all items as failed
                 for item in items {
                     await PersistentUploadQueue.shared.markAsFailed(item.id)
                 }
-                return false
+                print("🔄 BG_TASK_MANAGER: " + "❌ Failed to upload \(dataType) batch")
             }
             
-        } catch {
-            print("❌ Error processing queued items: \(error)")
-            return false
+            totalProcessed += items.count
         }
+        
+        print("🔄 BG_TASK_MANAGER: " + "🎯 Large batch: \(totalSuccessful)/\(totalProcessed) items successful")
+        return totalSuccessful > 0
     }
     
-    /// Perform upload with background-appropriate timeout
-    private func performBackgroundUpload(samples: [[String: Any]], dataType: String) async -> Bool {
+    // MARK: - Upload Helpers
+    
+    /// Attempt background upload with timeout
+    private func attemptBackgroundUpload(samples: [[String: Any]], timeoutSeconds: Int) async -> Bool {
         do {
-            // Longer timeout for background uploads
             let uploadTask = Task {
                 await uploader.uploadRawSamples(samples, batchType: "background")
             }
             
-            // 30 second timeout for background uploads
+            // Apply timeout
             let result = try await withThrowingTaskGroup(of: Bool.self) { group in
                 group.addTask { await uploadTask.value }
                 group.addTask {
-                    try await Task.sleep(nanoseconds: 30_000_000_000) // 30 seconds
+                    try await Task.sleep(nanoseconds: UInt64(timeoutSeconds) * 1_000_000_000)
                     throw TimeoutError.uploadTimeout
                 }
                 return try await group.next()!
@@ -280,28 +325,44 @@ class QueuedSyncOperation: Operation, @unchecked Sendable {
             return result
             
         } catch {
-            print("❌ Background upload failed: \(error)")
+            print("🔄 BG_TASK_MANAGER: " + "❌ Background upload failed: \(error)")
             return false
         }
     }
     
-    /// Update anchor from queued item (posts notification for coordination)
+    /// Update anchor from queued item data
     private func updateAnchorFromQueueItem(dataType: String, anchorData: Data) async {
-        // Post notification to main health module to update anchor
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(
-                name: NSNotification.Name("UpdateAnchorFromQueue"),
-                object: nil,
-                userInfo: [
-                    "dataType": dataType,
-                    "anchorData": anchorData
-                ]
-            )
-        }
+        await healthModule?.updateAnchorFromQueueItem(dataType: dataType, anchorData: anchorData)
     }
     
-    /// Get count of processed items (for reporting)
-    func getProcessedCount() -> Int {
-        return processedCount
+    // MARK: - App Lifecycle Handlers
+    
+    /// Handle app entering background
+    func handleAppDidEnterBackground() {
+        print("🔄 BG_TASK_MANAGER: " + "📱 App entered background - scheduling tasks")
+        scheduleAppRefreshTask()
+        scheduleProcessingTask()
+    }
+    
+    /// Handle app becoming active
+    func handleAppDidBecomeActive() {
+        print("🔄 BG_TASK_MANAGER: " + "📱 App became active")
+        // ForegroundSyncManager handles the heavy lifting
+    }
+    
+    // MARK: - Status and Debugging
+    
+    /// Get comprehensive background task status for debugging
+    func getSchedulingStatus() -> [String: Any] {
+        // Note: iOS doesn't provide direct access to scheduled task status
+        return [
+            "appRefreshTaskId": appRefreshTaskId,
+            "processingTaskId": processingTaskId,
+            "backgroundAppRefreshAvailable": UIApplication.shared.backgroundRefreshStatus == .available,
+            "isActivated": isActivated, // NEW: Activation state
+            "activationState": isActivated ? "ACTIVE - Tasks do real work" : "INACTIVE - Tasks complete immediately",
+            "hasHealthModule": healthModule != nil,
+            "lastUpdate": ISO8601DateFormatter().string(from: Date())
+        ]
     }
 }

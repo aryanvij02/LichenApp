@@ -23,6 +23,9 @@ import { CoachScreen } from "./screens/CoachScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { HealthKitService } from "./services/HealthKitService";
 
+import * as Localization from 'expo-localization';
+console.log('ExpoLocalization test:', Localization.getLocales());
+
 //This allows us to use native screen components (ios / android) instead or RN Views which improves performance
 enableScreens();
 

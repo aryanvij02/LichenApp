@@ -1,6 +1,6 @@
 {
-    "platforms": ["ios"],
-    "ios": {
-      "modules": ["ExpoHealthkitBridgeModule"]
-    }
+  "platforms": ["ios"],
+  "apple": {
+    "appDelegateSubscribers": ["BackgroundTaskAppDelegateSubscriber"]
   }
+}

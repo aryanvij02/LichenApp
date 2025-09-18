@@ -8,7 +8,7 @@ func log(_ message: String) {
     print("🔍 HEALTHKIT_DEBUG: \(message)")
 }
 
-public class ExpoHealthkitBridgeModule: Module {
+public class ExpoHealthkitBridgeModule: Module, @unchecked Sendable {
   private let healthStore = HKHealthStore()
   private var observerQueries: [HKObserverQuery] = []
   private var anchors: [String: HKQueryAnchor] = [:]
@@ -17,8 +17,70 @@ public class ExpoHealthkitBridgeModule: Module {
   private var tempAnchors: [String: HKQueryAnchor] = [:]
   private let uploader = HealthDataUploader()
   
+  // MARK: - Lazy Initialization Framework
+  /// Flag to track if heavy initialization has been completed
+  private var isBackgroundSyncInitialized = false
+  /// Queue for thread-safe initialization
+  private let initializationQueue = DispatchQueue(label: "com.lichenapp.initialization", qos: .userInitiated)
+  
+  /// Check if background sync has been initialized (thread-safe)
+  private var isInitialized: Bool {
+    return initializationQueue.sync { isBackgroundSyncInitialized }
+  }
+  
+  /// Perform heavy initialization only when background sync is first started
+  /// This prevents ExpoModulesCore crashes by moving complex setup out of OnCreate
+  private func initializeBackgroundSync() async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      initializationQueue.async { [weak self] in
+        guard let self = self else {
+          continuation.resume(throwing: NSError(domain: "HealthKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "Module deallocated during initialization"]))
+          return
+        }
+        
+        // Check if already initialized (thread-safe)
+        if self.isBackgroundSyncInitialized {
+          log("✅ Background sync already initialized - skipping")
+          continuation.resume()
+          return
+        }
+        
+        // PHASE 2: Heavy initialization happens here (when user enables sync)
+        log("🚀 Starting lazy background sync initialization...")
+        
+        // 1. ACTIVATE background tasks (slots were registered by AppDelegate Subscriber)
+        // This tells existing handlers to start doing real work instead of completing immediately
+        BackgroundTaskManager.shared.activateBackgroundTasks()
+        log("✅ Background tasks ACTIVATED - will now process real data")
+        
+        // 2. Set up coordination with all sync managers (heavyweight)
+        ForegroundSyncManager.shared.setHealthModule(self)
+        BackgroundTaskManager.shared.setHealthModule(self)
+        log("✅ Sync managers coordinated")
+        
+        // 3. Listen for anchor update notifications from background tasks (heavyweight)
+        self.setupNotificationListeners()
+        log("✅ Notification listeners set up")
+        
+        // 4. Set up app lifecycle notifications (heavyweight)
+        self.setupAppLifecycleNotifications()
+        log("✅ App lifecycle notifications set up")
+        
+        // 5. Mark initialization as complete
+        self.isBackgroundSyncInitialized = true
+        log("🎉 Background sync initialization completed successfully")
+        log("🎯 Background tasks are now ACTIVE and will process health data")
+        
+        continuation.resume()
+      }
+    }
+  }
+  
   public func definition() -> ModuleDefinition {
     Name("ExpoHealthkitBridge")
+
+    // Note: AppDelegate subscriber registration handled by expo-module.config.json
+    // See "apple.appDelegateSubscribers": ["BackgroundTaskAppDelegateSubscriber"]
 
     Events("onSyncEvent")
 
@@ -117,26 +179,40 @@ AsyncFunction("queryRecentDataSafe") { (types: [String], hours: Int) -> [String:
 Events("onSyncEvent")
 Events("onDataStream")
     OnCreate {
+      // PHASE 1: Ultra-lightweight initialization to prevent ExpoModulesCore crashes
+      
+      // Load stored anchors (very lightweight)
       self.loadAnchors()
       
-      // Register background tasks for health data sync
-      BackgroundTaskManager.shared.registerBackgroundTasks()
+      log("✅ OnCreate completed: Anchors loaded")
+      log("ℹ️ Background task registration handled by ExpoAppDelegateSubscriber")
+      log("ℹ️ Subscriber registered in expo-module.config.json")
+      log("ℹ️ Background sync activation will happen when user enables it")
       
-      // Set up coordination with all sync managers
-      ForegroundSyncManager.shared.setHealthModule(self)
-      BackgroundTaskManager.shared.setHealthModule(self)
-      
-      // Listen for anchor update notifications from background tasks
-      self.setupNotificationListeners()
-      
-      // Set up app lifecycle notifications
-      self.setupAppLifecycleNotifications()
+      // All other setup happens lazily when sync is first started
+      // Background task registration handled by BackgroundTaskAppDelegateSubscriber (ExpoAppDelegateSubscriber)
     }
 
     OnDestroy {
+      log("🧹 OnDestroy: Cleaning up background sync...")
+      
+      // Stop all HealthKit observers
       self.stopAllObservers()
+      
+      // Clean up notification listeners
       self.cleanupNotificationListeners()
       self.cleanupAppLifecycleNotifications()
+      
+      // DEACTIVATE background tasks (but keep slots registered for next app launch)
+      BackgroundTaskManager.shared.deactivateBackgroundTasks()
+      
+      // Reset lazy initialization flag for clean shutdown
+      self.initializationQueue.sync {
+        self.isBackgroundSyncInitialized = false
+      }
+      
+      log("🧹 OnDestroy completed: Observers stopped, tasks deactivated, state reset")
+      log("ℹ️ Background task slots remain registered for next app launch")
     }
   }
   
@@ -176,7 +252,7 @@ Events("onDataStream")
       forName: UIApplication.didBecomeActiveNotification,
       object: nil,
       queue: .main
-    ) { [weak self] _ in
+    ) { _ in
       Task {
         await ForegroundSyncManager.shared.handleAppBecameActive()
       }
@@ -187,7 +263,7 @@ Events("onDataStream")
       forName: UIApplication.didEnterBackgroundNotification,
       object: nil,
       queue: .main
-    ) { [weak self] _ in
+    ) { _ in
       ForegroundSyncManager.shared.handleAppWillEnterBackground()
       BackgroundTaskManager.shared.handleAppDidEnterBackground()
     }
@@ -299,6 +375,14 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
 }
   //Starts the background sync
   private func startBackgroundSync(types: [String]) async throws {
+    // Perform lazy initialization of heavy components (only on first call)
+    do {
+      try await initializeBackgroundSync()
+    } catch {
+      log("❌ Failed to initialize background sync: \(error)")
+      throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Background sync initialization failed: \(error.localizedDescription)"])
+    }
+    
     //Converts the types strings to Healthkit types. JS can only send a list of Strings, but we convert them to HKSampleType
     let healthKitTypes = types.compactMap { typeString -> HKSampleType? in
       return self.healthKitTypeFromString(typeString)
@@ -309,14 +393,15 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
     self.stopAllObservers()
     
     for type in healthKitTypes {
-      let observerQuery = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] query, completionHandler, error in
+      let observerQuery = HKObserverQuery(sampleType: type, predicate: nil) { query, completionHandler, error in
         if let error = error {
           print("Observer query error: \(error)")
+          completionHandler()
           return
         }
         
-        Task { [weak self] in
-          await self?.handleBackgroundUpdate(for: type)
+        Task {
+          await self.handleBackgroundUpdate(for: type)
           completionHandler()
         }
       }
@@ -339,12 +424,22 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
   }
 
   private func stopBackgroundSync() async {
+    log("🛑 Stopping background sync...")
+    
+    // Stop all HealthKit observers
     self.stopAllObservers()
+    log("✅ HealthKit observers stopped")
+    
+    // DEACTIVATE background tasks (but don't unregister - keep slots for next time)
+    BackgroundTaskManager.shared.deactivateBackgroundTasks()
+    log("✅ Background tasks DEACTIVATED - will complete immediately if triggered")
     
     self.sendEvent("onSyncEvent", [
       "phase": "observer", 
-      "message": "Background sync stopped"
+      "message": "Background sync stopped - background tasks deactivated"
     ])
+    
+    log("🏁 Background sync stopped successfully")
   }
 
   private func syncNow(types: [String]) async throws -> [String: Int] {
@@ -381,10 +476,22 @@ private func testDataAccess(for type: HKSampleType) async -> Bool {
   }
 
   private func getSyncStatus() async -> [String: Any?] {
+    // Get queue statistics from PersistentUploadQueue
+    let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
+    let pendingCount = queueStats["pending"] ?? 0
+    let failedCount = queueStats["failed"] ?? 0
+    let totalQueued = pendingCount + failedCount
+    
     return [
       "lastSyncISO": self.getLastSyncDate(),
-      "queuedBatches": 0, // TODO: Implement actual queue tracking
-      "lastError": nil    // TODO: Implement error tracking
+      "isInitialized": self.isInitialized,
+      "queueStatus": [
+        "pendingItems": pendingCount,
+        "failedItems": failedCount,
+        "totalQueuedItems": totalQueued
+      ],
+      "queueStatistics": queueStats,
+      "backgroundSyncEnabled": self.isInitialized
     ]
   }
 }
@@ -513,7 +620,7 @@ extension ExpoHealthkitBridgeModule {
         predicate: nil,
         anchor: anchor,
         limit: HKObjectQueryNoLimit
-      ) { [weak self] query, samples, deletedObjects, newAnchor, error in
+      ) { query, samples, deletedObjects, newAnchor, error in
         
         if let error = error {
           continuation.resume(throwing: error)
@@ -525,17 +632,15 @@ extension ExpoHealthkitBridgeModule {
         
         // Store the new anchor
         if let newAnchor = newAnchor {
-          Task { [weak self] in
-            await MainActor.run {
-              self?.anchors[type.identifier] = newAnchor
-              self?.saveAnchors()
-            }
+          Task { @MainActor in
+            self.anchors[type.identifier] = newAnchor
+            self.saveAnchors()
+            self.setLastSyncDate()
           }
-        }
-        
-        // Update last sync date
-        Task { @MainActor [weak self] in
-          self?.setLastSyncDate()
+        } else {
+          Task { @MainActor in
+            self.setLastSyncDate()
+          }
         }
         
         continuation.resume(returning: (added: addedCount, deleted: deletedCount))
@@ -605,7 +710,7 @@ extension ExpoHealthkitBridgeModule {
         predicate: nil,
         anchor: currentAnchor,
         limit: HKObjectQueryNoLimit
-      ) { [weak self] query, samples, deletedObjects, newAnchor, error in
+      ) { query, samples, deletedObjects, newAnchor, error in
         
         if let error = error {
           continuation.resume(throwing: error)
@@ -614,19 +719,19 @@ extension ExpoHealthkitBridgeModule {
         
         // Store new anchor temporarily - don't persist yet
         if let newAnchor = newAnchor {
-          Task { @MainActor [weak self] in
-            self?.tempAnchors[type.identifier] = newAnchor
+          Task { @MainActor in
+            self.tempAnchors[type.identifier] = newAnchor
             log("📍 Stored temporary anchor for \(type.identifier)")
           }
         }
         
         // Process samples without updating persistent anchors
-        Task { [weak self] in
+        Task {
           var processedSamples: [[String: Any]] = []
           
           if let samples = samples {
             for sample in samples {
-              if let processed = await self?.sampleToDictionaryWithVoltage(sample) {
+              if let processed = await self.sampleToDictionaryWithVoltage(sample) {
                 processedSamples.append(processed)
               }
             }
@@ -717,12 +822,12 @@ extension ExpoHealthkitBridgeModule {
         }
         
         // Process samples with basic processing for missed data check
-        Task { [weak self] in
+        Task {
           var processedSamples: [[String: Any]] = []
           
           if let samples = samples {
             for sample in samples {
-              if let processed = self?.sampleToDictionarySafely(sample) {
+              if let processed = self.sampleToDictionarySafely(sample) {
                 processedSamples.append(processed)
               }
             }
@@ -800,8 +905,8 @@ extension ExpoHealthkitBridgeModule {
   private func getQueueStatus() async -> [String: Any] {
     let queueStats = PersistentUploadQueue.shared.getQueueStatistics()
     let healthStatus = SyncAnalytics.shared.getSyncHealthStatus()
-    let bgTaskStatus = BackgroundTaskManager.shared.getSchedulingStatus()
-    let foregroundStatus = ForegroundSyncManager.shared.getSyncStatus()
+    // let bgTaskStatus = BackgroundTaskManager.shared.getSchedulingStatus()
+    // let foregroundStatus = ForegroundSyncManager.shared.getSyncStatus()
     
     return [
       "queue": queueStats,
@@ -811,8 +916,8 @@ extension ExpoHealthkitBridgeModule {
         "averageResponseTime": healthStatus.averageResponseTime,
         "consecutiveFailures": healthStatus.systemStatus.consecutiveFailures
       ],
-      "backgroundTasks": bgTaskStatus,
-      "foreground": foregroundStatus,
+      // "backgroundTasks": bgTaskStatus,
+      // "foreground": foregroundStatus,
       "anchors": anchors.keys.sorted(),
       "tempAnchors": tempAnchors.keys.sorted()
     ]
@@ -825,16 +930,16 @@ extension ExpoHealthkitBridgeModule {
     let startTime = Date()
     
     // Process foreground queue
-    let foregroundResult = await ForegroundSyncManager.shared.forceProcessQueue()
+    // let foregroundResult = await ForegroundSyncManager.shared.forceProcessQueue()
     
     // Process background queue
-    let backgroundResult = await BackgroundTaskManager.shared.processQueueNow()
+    // let backgroundResult = await BackgroundTaskManager.shared.processQueueNow()
     
     let duration = Date().timeIntervalSince(startTime)
     
     return [
-      "foreground": foregroundResult,
-      "background": backgroundResult,
+      // "foreground": foregroundResult,
+      // "background": backgroundResult,
       "totalDuration": duration,
       "timestamp": ISO8601DateFormatter().string(from: Date())
     ]
@@ -881,10 +986,10 @@ extension ExpoHealthkitBridgeModule {
     }
     
     // Check background task status
-    let bgStatus = BackgroundTaskManager.shared.getDetailedStatus()
-    if let bgEnabled = bgStatus["backgroundTasksEnabled"] as? Bool, !bgEnabled {
-      issues.append("Background tasks not enabled")
-    }
+    // let bgStatus = BackgroundTaskManager.shared.getDetailedStatus()
+    // if let bgEnabled = bgStatus["backgroundTasksEnabled"] as? Bool, !bgEnabled {
+    //   issues.append("Background tasks not enabled")
+    // }
     
     results["issues"] = issues
     results["isHealthy"] = issues.isEmpty
@@ -1157,12 +1262,7 @@ private func queryHistoricalDataSafely(for type: HKSampleType, from startDate: D
       log("📥 Raw samples count for \(type.identifier): \(samples.count)")
       
       // Process samples with ECG voltage data support in async context
-      Task { [weak self] in
-        guard let self = self else {
-          continuation.resume(returning: [])
-          return
-        }
-        
+      Task {
         var sampleData: [[String: Any]] = []
         for sample in samples {
           if let processedSample = await self.sampleToDictionaryWithVoltage(sample) {
@@ -1462,7 +1562,7 @@ private func handleBackgroundUpdate(for type: HKSampleType) async {
       ])
       
       // Schedule background processing for queued items
-      BackgroundTaskManager.shared.scheduleFrequentSync()
+      BackgroundTaskManager.shared.scheduleAppRefreshTask()
     }
     
   } catch {
@@ -1493,12 +1593,7 @@ private func getRecentSamples(for type: HKSampleType, count: Int) async throws -
       }
       
       // Process samples with ECG voltage data support in async context
-      Task { [weak self] in
-        guard let self = self else {
-          continuation.resume(returning: [])
-          return
-        }
-        
+      Task {
         var sampleData: [[String: Any]] = []
         if let samples = samples {
           for sample in samples {
@@ -1897,10 +1992,10 @@ private func authorizationStatusDescription(_ status: HKAuthorizationStatus) -> 
 }
 
 // MARK: - Timeout Error
-enum TimeoutError: Error {
+enum TimeoutError: Error, LocalizedError {
   case uploadTimeout
   
-  var localizedDescription: String {
+  var errorDescription: String? {
     switch self {
     case .uploadTimeout:
       return "Upload operation timed out"

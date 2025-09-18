@@ -36,22 +36,42 @@ export default {
           NSHealthShareUsageDescription: "HealthDataExporter reads your health data to create exportable reports.",
           NSHealthUpdateUsageDescription: "HealthDataExporter does not write any data to HealthKit.",
           UIBackgroundModes: ["background-fetch", "background-processing"],
-          BGTaskSchedulerPermittedIdentifiers: ["com.lichenapp.health-data-sync"],
+          BGTaskSchedulerPermittedIdentifiers: [
+            "com.lichenapp.healthsync.refresh", //BGAppRefreshTask
+            "com.lichenapp.healthsync.process" //BGProcessingTask
+          ],
           NSAppTransportSecurity: {
             NSAllowsArbitraryLoads: true
-          }
+          },
+          CFBundleURLTypes: [
+            {
+              CFBundleURLName: "GoogleSignIn",
+              CFBundleURLSchemes: [
+                "com.googleusercontent.apps.337554859297-vrbujkq27dk62t1vtu7aqnkt7cv7k0cv"
+              ]
+            }
+          ]
         },
         entitlements: {
           "com.apple.developer.healthkit": true,
           "com.apple.developer.healthkit.background-delivery": true
         }
       },
+      android: {
+        package: "Ginkgo.HealthDataExporter"
+      },
       web: {
         favicon: "./assets/favicon.png"
       },
       plugins: [
         "expo-dev-client",
-        "expo-localization"
+        "expo-localization",
+        [
+          "@react-native-google-signin/google-signin",
+          {
+            iosUrlScheme: "com.googleusercontent.apps.337554859297-vrbujkq27dk62t1vtu7aqnkt7cv7k0cv"
+          }
+        ]
       ]
     }
   };
